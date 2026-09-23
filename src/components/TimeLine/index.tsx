@@ -28,6 +28,7 @@ interface ICustomConfig {
   gapColor: string;
   nodeColor: string;
   showToday: boolean;
+  taskConfigs?: Record<string, { icon: string; color: string }>;
 }
 
 const DEFAULT_CONFIG: ICustomConfig = {
@@ -254,6 +255,22 @@ export default function TimeLine(props: { bgColor: string }) {
     updateCustom({ selectedTasks: custom.selectedTasks.filter((t) => t !== task) });
   };
 
+  /** 获取某任务的图标和颜色，未配置时回退到全局 */
+  const getTaskStyle = (task: string) => {
+    const tc = custom.taskConfigs?.[task];
+    return {
+      icon: tc?.icon || custom.icon,
+      color: tc?.color || custom.nodeColor,
+    };
+  };
+
+  const setTaskStyle = (task: string, patch: { icon?: string; color?: string }) => {
+    const cur = custom.taskConfigs?.[task] || { icon: custom.icon, color: custom.nodeColor };
+    updateCustom({
+      taskConfigs: { ...custom.taskConfigs, [task]: { ...cur, ...patch } },
+    });
+  };
+
   /** 从多维表格字段值中提取纯文本（兼容字符串/对象/数组） */
   const extractText = (val: any): string => {
     if (val === null || val === undefined) return '';
@@ -389,18 +406,23 @@ export default function TimeLine(props: { bgColor: string }) {
       <div className="tl-container">
         <div className="tl-scroll">
           <div className={vertical ? 'tl-charts-row' : 'tl-charts-col'}>
-            {taskModels.map(({ task, model }) => (
-              <div key={task} className={vertical ? 'tl-chart-cell' : 'tl-chart-cell-h'}>
-                <TimelineChart
-                  model={model}
-                  custom={custom}
-                  title={task}
-                  ready={inited || !isConfig}
-                  emptyText={commonEmpty}
-                  onNodeClick={(ts) => handleNodeClick(task, ts)}
-                />
-              </div>
-            ))}
+            {taskModels.map(({ task, model }) => {
+              const ts = getTaskStyle(task);
+              return (
+                <div key={task} className={vertical ? 'tl-chart-cell' : 'tl-chart-cell-h'}>
+                  <TimelineChart
+                    model={model}
+                    custom={custom}
+                    title={task}
+                    ready={inited || !isConfig}
+                    emptyText={commonEmpty}
+                    onNodeClick={(t) => handleNodeClick(task, t)}
+                    taskIcon={ts.icon}
+                    taskColor={ts.color}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -486,17 +508,36 @@ export default function TimeLine(props: { bgColor: string }) {
               <div className="tl-task-manager">
                 {custom.selectedTasks.length > 0 && (
                   <div className="tl-task-list">
-                    {custom.selectedTasks.map((task) => (
-                      <div key={task} className="tl-task-chip">
-                        <span>{task}</span>
-                        <button
-                          type="button"
-                          className="tl-task-remove"
-                          onClick={() => removeTask(task)}
-                          title="移除"
-                        >×</button>
-                      </div>
-                    ))}
+                    {custom.selectedTasks.map((task) => {
+                      const ts = getTaskStyle(task);
+                      return (
+                        <div key={task} className="tl-task-chip" style={{ borderLeftColor: ts.color }}>
+                          <Select
+                            size="small"
+                            style={{ width: 52, flexShrink: 0 }}
+                            value={ts.icon}
+                            optionList={ICON_OPTIONS.map((ic) => ({ value: ic, label: ic }))}
+                            onChange={(v) => setTaskStyle(task, { icon: v as string })}
+                          />
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {task}
+                          </span>
+                          <input
+                            type="color"
+                            value={ts.color}
+                            onChange={(e) => setTaskStyle(task, { color: e.target.value })}
+                            style={{ width: 24, height: 24, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }}
+                            title="任务颜色"
+                          />
+                          <button
+                            type="button"
+                            className="tl-task-remove"
+                            onClick={() => removeTask(task)}
+                            title="移除"
+                          >×</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <Select
@@ -616,15 +657,15 @@ export default function TimeLine(props: { bgColor: string }) {
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>{custom.icon}</span>
+            <span style={{ fontSize: 20 }}>{getTaskStyle(detail.task).icon}</span>
             <span style={{ fontWeight: 600, fontSize: 16 }}>{detail.task}</span>
             <span style={{ color: '#999', fontSize: 14 }}>
               {dayjs(detail.ts).format('YYYY年M月D日 dddd')}
             </span>
             <span style={{
               marginLeft: 'auto', fontSize: 12, padding: '2px 10px',
-              borderRadius: 10, background: custom.solidColor + '22', color: custom.solidColor,
-              fontWeight: 600,
+              borderRadius: 10, background: getTaskStyle(detail.task).color + '22',
+              color: getTaskStyle(detail.task).color, fontWeight: 600,
             }}>
               {detail.records.length} 条记录
             </span>
@@ -658,7 +699,7 @@ export default function TimeLine(props: { bgColor: string }) {
                   marginBottom: 14,
                   padding: '14px 16px',
                   border: '1px solid #f0f0f0',
-                  borderLeft: `3px solid ${custom.solidColor}`,
+                  borderLeft: `3px solid ${getTaskStyle(detail.task).color}`,
                   borderRadius: 8,
                   background: '#fafbfc',
                 }}
@@ -684,7 +725,7 @@ export default function TimeLine(props: { bgColor: string }) {
                         <span style={{
                           color: '#333', wordBreak: 'break-all',
                           fontWeight: cat.fieldId === taskFieldId ? 600 : 400,
-                          color: cat.fieldId === taskFieldId ? custom.nodeColor : '#333',
+                          color: cat.fieldId === taskFieldId ? getTaskStyle(detail.task).color : '#333',
                         }}>
                           {display}
                         </span>
@@ -710,8 +751,12 @@ function TimelineChart(props: {
   ready: boolean;
   emptyText: string;
   onNodeClick?: (ts: number) => void;
+  taskIcon?: string;
+  taskColor?: string;
 }) {
-  const { model, custom, title, ready, emptyText, onNodeClick } = props;
+  const { model, custom, title, ready, emptyText, onNodeClick, taskIcon, taskColor } = props;
+  const icon = taskIcon || custom.icon;
+  const nodeColor = taskColor || custom.nodeColor;
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 300, h: 300 });
 
@@ -850,7 +895,7 @@ function TimelineChart(props: {
           return (
             <g key={`n-${i}`}>
               <circle
-                cx={cx} cy={cy} r={r} fill={custom.nodeColor}
+                cx={cx} cy={cy} r={r} fill={nodeColor}
                 style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
                 onClick={() => onNodeClick?.(ts)}
               />
@@ -876,7 +921,7 @@ function TimelineChart(props: {
           return (
             <g key={`h-${i}`}>
               <circle
-                cx={cx} cy={cy} r={r} fill="none" stroke={custom.nodeColor} strokeWidth={lw}
+                cx={cx} cy={cy} r={r} fill="transparent" stroke={nodeColor} strokeWidth={lw}
                 style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
                 onClick={() => onNodeClick?.(ts)}
               />
@@ -902,7 +947,7 @@ function TimelineChart(props: {
             dominantBaseline="central"
             fontSize={12}
             fontWeight={600}
-            fill={custom.nodeColor}
+            fill={nodeColor}
           >
             今天
           </text>
@@ -912,11 +957,11 @@ function TimelineChart(props: {
         {custom.showTitle && title && (
           <TaskLabel
             name={title}
-            icon={custom.icon}
+            icon={icon}
             x={vertical ? xC : 22}
             y={vertical ? 22 : yC}
             vertical={vertical}
-            nodeColor={custom.nodeColor}
+            nodeColor={nodeColor}
           />
         )}
       </svg>

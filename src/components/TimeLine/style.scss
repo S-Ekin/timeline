@@ -117,15 +117,17 @@
 }
 
 .tl-task-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 10px;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
   background: var(--semi-color-fill-0, #f2f3f5);
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: 10px;
+  border-left: 3px solid #999;
+  font-size: 13px;
   color: var(--ccm-chart-N900, #1f2329);
   max-width: 100%;
+  margin-bottom: 6px;
 }
 
 .tl-task-chip span {
