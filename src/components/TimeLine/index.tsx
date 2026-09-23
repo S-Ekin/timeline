@@ -1,7 +1,7 @@
 import './style.scss';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  dashboard, bitable, DashboardState, GroupMode, ORDER,
+  dashboard, bitable, ui, DashboardState, GroupMode, ORDER,
   DATA_SOURCE_SORT_TYPE, SourceType, FieldType,
 } from '@lark-base-open/js-sdk';
 import { Button, DatePicker, Radio, Select, Input, Switch, Slider, Modal, Popover } from '@douyinfe/semi-ui';
@@ -332,16 +332,14 @@ export default function TimeLine(props: { bgColor: string }) {
     return String(val);
   };
 
-  /** 点击节点：查询该任务在该日期的所有原始记录 */
+  /** 点击节点：查询该任务在该日期的所有原始记录，用飞书原生弹窗展示 */
   const handleNodeClick = async (task: string, ts: number) => {
-    setDetail({ visible: true, task, ts, records: [], loading: true });
     try {
       const table = await bitable.base.getTableById(tableId);
       const dayStart = startOfDay(ts);
       let allRecords: any[] = [];
       let pageToken: string | undefined;
       let page = 0;
-      // 全量分页获取，不使用 filter（避免 operator/value 格式不兼容），前端筛选
       do {
         const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
         const recs = result.records || result.items || [];
@@ -351,31 +349,34 @@ export default function TimeLine(props: { bgColor: string }) {
         if (page > 20) break;
       } while (pageToken);
 
-      console.log('[TimeLine] node click', {
-        task, date: dayjs(ts).format('YYYY-MM-DD'), totalFetched: allRecords.length,
-        taskFieldId, dateFieldId,
-      });
-
       const dayRecords = allRecords.filter((rec: any) => {
         const fields = rec.fields || rec.fieldValues || {};
         const taskText = extractText(fields[taskFieldId]);
         const dateTs = extractTimestamp(fields[dateFieldId]);
-        const taskMatch = taskText === task;
-        const dateMatch = dateTs != null && startOfDay(dateTs) === dayStart;
-        if (taskMatch) {
-          console.log('[TimeLine] task-match record', {
-            recordId: rec.recordId, dateRaw: fields[dateFieldId], dateTs, dateMatch,
-          });
-        }
-        return taskMatch && dateMatch;
+        return taskText === task && dateTs != null && startOfDay(dateTs) === dayStart;
       });
 
-      console.log('[TimeLine] matched records:', dayRecords.length);
-      setDetail((prev) => ({ ...prev, records: dayRecords, loading: false }));
+      console.log('[TimeLine] node click', { task, date: dayjs(ts).format('YYYY-MM-DD'), matched: dayRecords.length });
+
+      if (dayRecords.length === 0) {
+        ui.showToast({ toastType: 'warning', message: `${task} · ${dayjs(ts).format('M月D日')} 暂无记录` });
+        return;
+      }
+      if (dayRecords.length === 1) {
+        ui.showRecordDetailDialog({ tableId, recordId: dayRecords[0].recordId });
+        return;
+      }
+      // 多条记录：显示选择列表
+      setDetail({ visible: true, task, ts, records: dayRecords, loading: false });
     } catch (e) {
       console.error('[TimeLine] fetch records failed', e);
-      setDetail((prev) => ({ ...prev, records: [], loading: false }));
+      ui.showToast({ toastType: 'error', message: '查询记录失败' });
     }
+  };
+
+  const openRecordDetail = (recordId: string) => {
+    ui.showRecordDetailDialog({ tableId, recordId });
+    setDetail((prev) => ({ ...prev, visible: false }));
   };
 
   const onSave = () => {
@@ -663,90 +664,64 @@ export default function TimeLine(props: { bgColor: string }) {
         </div>
       )}
 
-      {/* 节点详情弹窗 */}
+      {/* 多条记录选择弹窗 */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>{getTaskStyle(detail.task).icon}</span>
-            <span style={{ fontWeight: 600, fontSize: 16 }}>{detail.task}</span>
-            <span style={{ color: '#999', fontSize: 14 }}>
-              {dayjs(detail.ts).format('YYYY年M月D日 dddd')}
-            </span>
-            <span style={{
-              marginLeft: 'auto', fontSize: 12, padding: '2px 10px',
-              borderRadius: 10, background: getTaskStyle(detail.task).color + '22',
-              color: getTaskStyle(detail.task).color, fontWeight: 600,
-            }}>
-              {detail.records.length} 条记录
+            <span style={{ fontSize: 18 }}>{getTaskStyle(detail.task).icon}</span>
+            <span style={{ fontWeight: 600 }}>{detail.task}</span>
+            <span style={{ color: '#999', fontSize: 13 }}>
+              {dayjs(detail.ts).format('M月D日')} · 共 {detail.records.length} 条
             </span>
           </div>
         }
         visible={detail.visible}
         onCancel={() => setDetail((prev) => ({ ...prev, visible: false }))}
         footer={null}
-        width={680}
+        width={480}
         centered
       >
-        {detail.loading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#999' }}>
-            <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
-            正在加载记录…
-          </div>
-        ) : detail.records.length === 0 ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#bbb' }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-            <div>该日期暂无记录</div>
-            <div style={{ fontSize: 12, marginTop: 8, color: '#ccc' }}>
-              请检查 DevTools Console 中 [TimeLine] 开头的日志排查
-            </div>
-          </div>
-        ) : (
-          <div style={{ maxHeight: 520, overflowY: 'auto', paddingRight: 4 }}>
-            {detail.records.map((rec, idx) => (
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {detail.records.map((rec, idx) => {
+            const fields = rec.fields || {};
+            const taskColor = getTaskStyle(detail.task).color;
+            return (
               <div
                 key={rec.recordId || idx}
+                onClick={() => openRecordDetail(rec.recordId)}
                 style={{
-                  marginBottom: 14,
-                  padding: '14px 16px',
-                  border: '1px solid #f0f0f0',
-                  borderLeft: `3px solid ${getTaskStyle(detail.task).color}`,
-                  borderRadius: 8,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', marginBottom: 8,
+                  border: '1px solid #f0f0f0', borderRadius: 8,
+                  cursor: 'pointer', transition: 'all 0.15s ease',
                   background: '#fafbfc',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.background = '#fff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; e.currentTarget.style.background = '#fafbfc'; }}
               >
-                <div style={{
-                  fontSize: 11, color: '#aaa', marginBottom: 10,
-                  letterSpacing: 0.5, fontWeight: 600,
+                <span style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: taskColor + '18', color: taskColor,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 600, flexShrink: 0,
                 }}>
-                  记录 {String(idx + 1).padStart(2, '0')}
+                  {idx + 1}
+                </span>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  {categories.slice(0, 3).map((cat: any) => (
+                    <div key={cat.fieldId} style={{ fontSize: 12, lineHeight: 1.6, display: 'flex', gap: 6 }}>
+                      <span style={{ color: '#999', flexShrink: 0 }}>{cat.fieldName}:</span>
+                      <span style={{ color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {formatFieldValue(fields[cat.fieldId])}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
-                  {categories.map((cat: any) => {
-                    const val = rec.fields?.[cat.fieldId];
-                    const display = formatFieldValue(val);
-                    return (
-                      <div key={cat.fieldId} style={{
-                        display: 'flex', flexDirection: 'column',
-                        fontSize: 13, lineHeight: 1.5,
-                      }}>
-                        <span style={{ color: '#999', fontSize: 11, marginBottom: 1 }}>
-                          {cat.fieldName}
-                        </span>
-                        <span style={{
-                          color: '#333', wordBreak: 'break-all',
-                          fontWeight: cat.fieldId === taskFieldId ? 600 : 400,
-                          color: cat.fieldId === taskFieldId ? getTaskStyle(detail.task).color : '#333',
-                        }}>
-                          {display}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <span style={{ color: '#ccc', fontSize: 16, flexShrink: 0 }}>›</span>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </Modal>
     </main>
   );
