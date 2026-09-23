@@ -1,0 +1,192 @@
+.tl-main {
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tl-main-config {
+  display: flex;
+  height: 100%;
+  position: relative;
+}
+
+.tl-container {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 统一滚动容器 */
+.tl-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+/* 多时间轴布局 */
+.tl-charts-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.tl-charts-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.tl-chart-cell {
+  flex: 1 1 0;
+  min-width: 180px;
+  border-right: 1px dashed var(--divider, rgba(31, 35, 41, 0.1));
+  box-sizing: border-box;
+}
+
+.tl-chart-cell:last-child {
+  border-right: none;
+}
+
+.tl-chart-cell-h {
+  flex: 1 1 0;
+  min-height: 160px;
+  border-bottom: 1px dashed var(--divider, rgba(31, 35, 41, 0.1));
+  box-sizing: border-box;
+}
+
+.tl-chart-cell-h:last-child {
+  border-bottom: none;
+}
+
+.tl-chart {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.tl-chart.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ccm-chart-N900, #1f2329);
+  padding: 20px;
+  text-align: center;
+}
+
+.tl-settings {
+  border-left: 1px solid var(--divider, rgba(31, 35, 41, 0.15));
+  flex: 0 340px;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.tl-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.tl-save-row {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider, rgba(31, 35, 41, 0.1));
+}
+
+.tl-btn {
+  width: 100%;
+}
+
+/* 任务管理 */
+.tl-task-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tl-task-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tl-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  background: var(--semi-color-fill-0, #f2f3f5);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--ccm-chart-N900, #1f2329);
+  max-width: 100%;
+}
+
+.tl-task-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-task-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--semi-color-fill-2, #dcdfe3);
+  color: var(--ccm-chart-N900, #1f2329);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.tl-task-remove:hover {
+  background: var(--semi-danger-light-4, #f5c6c6);
+  color: #f54a45;
+}
+
+.tl-section {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ccm-chart-N900, #1f2329);
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--divider, rgba(31, 35, 41, 0.1));
+}
+
+.tl-section:first-child {
+  margin-top: 0;
+}
+
+.tl-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tl-color-input {
+  width: 36px;
+  height: 28px;
+  border: 1px solid var(--divider, rgba(31, 35, 41, 0.15));
+  border-radius: 4px;
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+}
+
+.tl-color-hex {
+  font-size: 12px;
+  color: var(--ccm-chart-N900, #1f2329);
+  font-family: monospace;
+}

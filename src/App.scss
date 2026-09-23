@@ -1,0 +1,53 @@
+@import "reset-css";
+
+body[theme-mode="light"] {
+  --ccm-chart-P100: #ece2fe;
+  --ccm-chart-P500: #7f3bf5;
+  --ccm-chart-B500: #3370ff;
+  --ccm-chart-W300: #7edafb;
+  --ccm-chart-R500: #f54a45;
+  --ccm-chart-N900: #1f2329;
+
+  --tl-solid: #9c27b0;
+  --tl-gap: #b8e8ec;
+  --tl-streak-num: #3370ff;
+  --tl-gap-num: #f54a45;
+  --tl-node: #1e3a5f;
+  --tl-date: #7c3aed;
+  --tl-task-bg: #f3e8ff;
+  --tl-task-text: #1f2329;
+}
+
+body[theme-mode="dark"] {
+  --ccm-chart-P100: #361d61;
+  --ccm-chart-P500: #9762f5;
+  --ccm-chart-B500: #4c88ff;
+  --ccm-chart-W300: #2782a3;
+  --ccm-chart-R500: #f05b56;
+  --ccm-chart-N900: #ebebeb;
+
+  --tl-solid: #b06cf5;
+  --tl-gap: #4a7a80;
+  --tl-streak-num: #6aa6ff;
+  --tl-gap-num: #ff7a75;
+  --tl-node: #dfe6f0;
+  --tl-date: #c9a5ff;
+  --tl-task-bg: #3a2560;
+  --tl-task-text: #f0e8ff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, Helvetica Neue, Tahoma,
+    PingFang SC, Microsoft Yahei, Arial, Hiragino Sans GB, sans-serif,
+    Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+}

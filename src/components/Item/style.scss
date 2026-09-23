@@ -1,0 +1,17 @@
+.form-item {
+  margin-bottom: 16px;
+}
+.form-item .label {
+  font-size: 13px;
+  color: var(--ccm-chart-N900, #1f2329);
+  margin-bottom: 6px;
+}
+.form-item .item-content {
+  width: 100%;
+}
+.label-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
