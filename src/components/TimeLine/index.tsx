@@ -254,6 +254,34 @@ export default function TimeLine(props: { bgColor: string }) {
     updateCustom({ selectedTasks: custom.selectedTasks.filter((t) => t !== task) });
   };
 
+  /** 从多维表格字段值中提取纯文本（兼容字符串/对象/数组） */
+  const extractText = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number') return String(val);
+    if (Array.isArray(val)) return val.map(extractText).filter(Boolean).join(',');
+    if (typeof val === 'object') return val.text || val.name || val.value || '';
+    return String(val);
+  };
+
+  /** 从日期字段值中提取毫秒时间戳（兼容数字/字符串/对象/数组） */
+  const extractTimestamp = (val: any): number | null => {
+    if (val === null || val === undefined) return null;
+    let raw: any = val;
+    if (Array.isArray(raw)) raw = raw[0];
+    if (typeof raw === 'object' && raw !== null) {
+      raw = raw.value ?? raw.text ?? raw.timestamp;
+    }
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (typeof raw === 'string') {
+      const n = Number(raw);
+      if (!isNaN(n)) return n > 1e12 ? n : n * 1000;
+      const d = dayjs(raw);
+      if (d.isValid()) return d.valueOf();
+    }
+    return null;
+  };
+
   /** 格式化多维表格字段值为可读字符串 */
   const formatFieldValue = (val: any): string => {
     if (val === null || val === undefined || val === '') return '—';
@@ -270,7 +298,6 @@ export default function TimeLine(props: { bgColor: string }) {
       return val.text || val.name || val.value || JSON.stringify(val);
     }
     if (typeof val === 'number') {
-      // 日期字段值是毫秒时间戳，尝试格式化
       if (val > 1e12) return dayjs(val).format('YYYY-MM-DD HH:mm');
       return String(val);
     }
@@ -285,25 +312,37 @@ export default function TimeLine(props: { bgColor: string }) {
       const dayStart = startOfDay(ts);
       let allRecords: any[] = [];
       let pageToken: string | undefined;
-      // 先用任务字段过滤，再前端按日期筛选（稳妥，不依赖日期 filter 行为）
+      let page = 0;
+      // 全量分页获取，不使用 filter（避免 operator/value 格式不兼容），前端筛选
       do {
-        const result: any = await table.getRecords({
-          pageSize: 500,
-          pageToken,
-          filter: {
-            conjunction: 'and',
-            conditions: [{ fieldId: taskFieldId, operator: 'is', value: [task] }],
-          },
-        } as any);
-        allRecords = allRecords.concat(result.records || []);
-        pageToken = result.pageToken;
+        const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
+        const recs = result.records || result.items || [];
+        allRecords = allRecords.concat(recs);
+        pageToken = result.pageToken || result.nextPageToken;
+        page++;
+        if (page > 20) break;
       } while (pageToken);
 
-      const dayRecords = allRecords.filter((rec: any) => {
-        const dateVal = rec.fields?.[dateFieldId];
-        const tsVal = Array.isArray(dateVal) ? dateVal[0] : dateVal;
-        return tsVal != null && startOfDay(Number(tsVal)) === dayStart;
+      console.log('[TimeLine] node click', {
+        task, date: dayjs(ts).format('YYYY-MM-DD'), totalFetched: allRecords.length,
+        taskFieldId, dateFieldId,
       });
+
+      const dayRecords = allRecords.filter((rec: any) => {
+        const fields = rec.fields || rec.fieldValues || {};
+        const taskText = extractText(fields[taskFieldId]);
+        const dateTs = extractTimestamp(fields[dateFieldId]);
+        const taskMatch = taskText === task;
+        const dateMatch = dateTs != null && startOfDay(dateTs) === dayStart;
+        if (taskMatch) {
+          console.log('[TimeLine] task-match record', {
+            recordId: rec.recordId, dateRaw: fields[dateFieldId], dateTs, dateMatch,
+          });
+        }
+        return taskMatch && dateMatch;
+      });
+
+      console.log('[TimeLine] matched records:', dayRecords.length);
       setDetail((prev) => ({ ...prev, records: dayRecords, loading: false }));
     } catch (e) {
       console.error('[TimeLine] fetch records failed', e);
@@ -576,47 +615,83 @@ export default function TimeLine(props: { bgColor: string }) {
       {/* 节点详情弹窗 */}
       <Modal
         title={
-          <span>
-            {detail.task} · {dayjs(detail.ts).format('YYYY年M月D日')}
-            <span style={{ marginLeft: 8, fontSize: 13, color: '#888' }}>
-              共 {detail.records.length} 条记录
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>{custom.icon}</span>
+            <span style={{ fontWeight: 600, fontSize: 16 }}>{detail.task}</span>
+            <span style={{ color: '#999', fontSize: 14 }}>
+              {dayjs(detail.ts).format('YYYY年M月D日 dddd')}
             </span>
-          </span>
+            <span style={{
+              marginLeft: 'auto', fontSize: 12, padding: '2px 10px',
+              borderRadius: 10, background: custom.solidColor + '22', color: custom.solidColor,
+              fontWeight: 600,
+            }}>
+              {detail.records.length} 条记录
+            </span>
+          </div>
         }
         visible={detail.visible}
         onCancel={() => setDetail((prev) => ({ ...prev, visible: false }))}
         footer={null}
-        width={640}
+        width={680}
+        centered
       >
         {detail.loading ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>加载中…</div>
+          <div style={{ padding: 48, textAlign: 'center', color: '#999' }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
+            正在加载记录…
+          </div>
         ) : detail.records.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>该日期无记录</div>
+          <div style={{ padding: 48, textAlign: 'center', color: '#bbb' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+            <div>该日期暂无记录</div>
+            <div style={{ fontSize: 12, marginTop: 8, color: '#ccc' }}>
+              请检查 DevTools Console 中 [TimeLine] 开头的日志排查
+            </div>
+          </div>
         ) : (
-          <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 520, overflowY: 'auto', paddingRight: 4 }}>
             {detail.records.map((rec, idx) => (
               <div
                 key={rec.recordId || idx}
                 style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  border: '1px solid #e8e8e8',
+                  marginBottom: 14,
+                  padding: '14px 16px',
+                  border: '1px solid #f0f0f0',
+                  borderLeft: `3px solid ${custom.solidColor}`,
                   borderRadius: 8,
-                  background: idx % 2 === 0 ? '#fafafa' : '#fff',
+                  background: '#fafbfc',
                 }}
               >
-                <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>
-                  记录 #{idx + 1}
+                <div style={{
+                  fontSize: 11, color: '#aaa', marginBottom: 10,
+                  letterSpacing: 0.5, fontWeight: 600,
+                }}>
+                  记录 {String(idx + 1).padStart(2, '0')}
                 </div>
-                {categories.map((cat: any) => {
-                  const val = rec.fields?.[cat.fieldId];
-                  return (
-                    <div key={cat.fieldId} style={{ display: 'flex', fontSize: 13, lineHeight: 1.8 }}>
-                      <span style={{ minWidth: 90, color: '#666', flexShrink: 0 }}>{cat.fieldName}</span>
-                      <span style={{ color: '#333', wordBreak: 'break-all' }}>{formatFieldValue(val)}</span>
-                    </div>
-                  );
-                })}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                  {categories.map((cat: any) => {
+                    const val = rec.fields?.[cat.fieldId];
+                    const display = formatFieldValue(val);
+                    return (
+                      <div key={cat.fieldId} style={{
+                        display: 'flex', flexDirection: 'column',
+                        fontSize: 13, lineHeight: 1.5,
+                      }}>
+                        <span style={{ color: '#999', fontSize: 11, marginBottom: 1 }}>
+                          {cat.fieldName}
+                        </span>
+                        <span style={{
+                          color: '#333', wordBreak: 'break-all',
+                          fontWeight: cat.fieldId === taskFieldId ? 600 : 400,
+                          color: cat.fieldId === taskFieldId ? custom.nodeColor : '#333',
+                        }}>
+                          {display}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
