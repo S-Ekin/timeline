@@ -4,7 +4,7 @@ import {
   dashboard, bitable, DashboardState, GroupMode, ORDER,
   DATA_SOURCE_SORT_TYPE, SourceType, FieldType,
 } from '@lark-base-open/js-sdk';
-import { Button, DatePicker, Radio, Select, Input, Switch, Slider, Modal } from '@douyinfe/semi-ui';
+import { Button, DatePicker, Radio, Select, Input, Switch, Slider, Modal, Popover } from '@douyinfe/semi-ui';
 import dayjs from 'dayjs';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
@@ -59,9 +59,20 @@ function normalizeConfig(saved: any): ICustomConfig {
 }
 
 const ICON_OPTIONS = [
-  '📌', '✅', '🎯', '🏃', '📚', '💪', '🧘', '🍎', '💧', '😴',
-  '✍️', '🎨', '🎵', '💰', '🌱', '⭐', '🔥', '❤️', '👟', '🎸',
-  '🧹', '🚴', '🏊', '🍳', '☕', '📝', '💻', '🎮', '🌙', '☀️',
+  // 目标与成就
+  '🎯', '✅', '🏆', '🥇', '🎖️', '🏅', '💯', '⭐', '🔥', '🚀',
+  // 学习与工作
+  '📚', '📖', '🎓', '🧠', '✍️', '📝', '💻', '🎨', '🎵', '🔬',
+  // 健康与运动
+  '💪', '🏃', '🚴', '🏊', '🧘', '🏋️', '🧗', '🚶', '🏃‍♀️', '🤸',
+  // 饮食
+  '🍎', '💧', '🍳', '☕', '🥗', '🍜', '🥑', '🥛', '🍵', '🍇',
+  // 生活
+  '😴', '🌙', '☀️', '🌱', '💰', '🏠', '🛒', '✈️', '🚗', '🧹',
+  // 兴趣与娱乐
+  '🎸', '🎹', '🎮', '📷', '🎬', '🧩', '🎲', '🎤', '🖼️', '🎭',
+  // 其他
+  '📌', '❤️', '👟', '🌟', '💎', '🌈', '🎁', '📱', '⌚', '🧴',
 ];
 
 export default function TimeLine(props: { bgColor: string }) {
@@ -448,13 +459,14 @@ export default function TimeLine(props: { bgColor: string }) {
               <div />
             </Item>
             <Item label={t('label.icon')}>
-              <Select
-                showSearch
-                style={{ width: '100%' }}
-                value={custom.icon}
-                optionList={ICON_OPTIONS.map((ic) => ({ value: ic, label: ic }))}
-                onChange={(v) => updateCustom({ icon: v as string })}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <IconPicker
+                  value={custom.icon}
+                  onChange={(ic) => updateCustom({ icon: ic })}
+                  size={34}
+                />
+                <span style={{ fontSize: 13, color: '#999' }}>点击选择默认图标（未单独配置的任务使用）</span>
+              </div>
             </Item>
 
             {/* 数据源 */}
@@ -512,21 +524,19 @@ export default function TimeLine(props: { bgColor: string }) {
                       const ts = getTaskStyle(task);
                       return (
                         <div key={task} className="tl-task-chip" style={{ borderLeftColor: ts.color }}>
-                          <Select
-                            size="small"
-                            style={{ width: 52, flexShrink: 0 }}
+                          <IconPicker
                             value={ts.icon}
-                            optionList={ICON_OPTIONS.map((ic) => ({ value: ic, label: ic }))}
-                            onChange={(v) => setTaskStyle(task, { icon: v as string })}
+                            onChange={(ic) => setTaskStyle(task, { icon: ic })}
+                            size={30}
                           />
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
                             {task}
                           </span>
                           <input
                             type="color"
                             value={ts.color}
                             onChange={(e) => setTaskStyle(task, { color: e.target.value })}
-                            style={{ width: 24, height: 24, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }}
+                            className="tl-task-color"
                             title="任务颜色"
                           />
                           <button
@@ -968,6 +978,45 @@ function TimelineChart(props: {
     </div>
   );
 }
+
+/* ---------------- 图标选择器 ---------------- */
+
+function IconPicker(props: {
+  value: string;
+  onChange: (icon: string) => void;
+  size?: number;
+}) {
+  const { value, onChange, size = 30 } = props;
+  const [visible, setVisible] = useState(false);
+  return (
+    <Popover
+      visible={visible}
+      onVisibleChange={setVisible}
+      trigger="click"
+      position="bottomLeft"
+      content={
+        <div className="tl-icon-picker">
+          {ICON_OPTIONS.map((ic) => (
+            <button
+              key={ic}
+              className={`tl-icon-picker-item ${ic === value ? 'active' : ''}`}
+              onClick={() => { onChange(ic); setVisible(false); }}
+              title={ic}
+            >
+              {ic}
+            </button>
+          ))}
+        </div>
+      }
+    >
+      <button className="tl-icon-picker-trigger" style={{ width: size, height: size, fontSize: size * 0.55 }}>
+        {value}
+      </button>
+    </Popover>
+  );
+}
+
+/* ---------------- 任务标签 ---------------- */
 
 function TaskLabel(props: {
   name: string;

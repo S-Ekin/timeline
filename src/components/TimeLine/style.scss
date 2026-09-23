@@ -192,3 +192,99 @@
   color: var(--ccm-chart-N900, #1f2329);
   font-family: monospace;
 }
+
+/* 图标选择器 */
+.tl-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  padding: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  width: 280px;
+}
+
+.tl-icon-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.tl-icon-picker-item:hover {
+  background: var(--semi-color-fill-1, #e8e9eb);
+  transform: scale(1.15);
+}
+
+.tl-icon-picker-item.active {
+  background: var(--semi-color-primary-light-default, #e0eaff);
+  border-color: var(--semi-color-primary, #3370ff);
+}
+
+.tl-icon-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--divider, rgba(31, 35, 41, 0.15));
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tl-icon-picker-trigger:hover {
+  border-color: var(--semi-color-primary, #3370ff);
+}
+
+/* 任务颜色选择器 */
+.tl-task-color {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  box-shadow: 0 0 0 1px var(--divider, rgba(31, 35, 41, 0.2));
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.tl-task-color:hover {
+  transform: scale(1.15);
+}
+
+/* 配置面板美化 */
+.tl-settings {
+  background: #fafbfc;
+}
+
+.tl-section {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  margin: 18px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--divider, rgba(31, 35, 41, 0.08));
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tl-section:first-child {
+  margin-top: 0;
+}
+
+/* 滑块行优化 */
+.tl-form .semi-slider-wrapper {
+  padding: 4px 0;
+}
