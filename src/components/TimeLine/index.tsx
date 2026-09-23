@@ -201,9 +201,20 @@ export default function TimeLine(props: { bgColor: string }) {
     let off: any;
     (async () => {
       const cfg = await dashboard.getConfig();
+      const dc = Array.isArray(cfg.dataConditions) ? cfg.dataConditions[0] : cfg.dataConditions;
       const saved = (cfg.customConfig || {}) as Partial<ICustomConfig>;
       const merged = normalizeConfig(saved);
       setCustom(merged);
+      const tid = dc?.tableId || '';
+      setTableId(tid);
+      setTaskFieldId(dc?.groups?.[0]?.fieldId || '');
+      setDateFieldId(dc?.groups?.[1]?.fieldId || '');
+      if (tid) {
+        try {
+          const cats = await dashboard.getCategories(tid);
+          setCategories(cats);
+        } catch (e) { console.error('load categories failed', e); }
+      }
       const data = await dashboard.getData();
       setRenderData(data);
       off = dashboard.onDataChange((res: any) => setRenderData(res.data));
@@ -334,6 +345,10 @@ export default function TimeLine(props: { bgColor: string }) {
 
   /** 点击节点：查询该任务在该日期的所有原始记录，用飞书原生弹窗展示 */
   const handleNodeClick = async (task: string, ts: number) => {
+    if (!tableId) {
+      ui.showToast({ toastType: 'error', message: '数据表未初始化，请重新打开插件' });
+      return;
+    }
     try {
       const table = await bitable.base.getTableById(tableId);
       const dayStart = startOfDay(ts);
