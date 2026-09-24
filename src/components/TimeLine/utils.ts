@@ -170,3 +170,53 @@ export function buildTimeline(
 export function formatDate(ts: number): string {
   return dayjs(ts).format('M-D');
 }
+
+/** 从多维表格字段值中提取纯文本（兼容字符串/对象/数组） */
+export function extractText(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (Array.isArray(val)) return val.map(extractText).filter(Boolean).join(',');
+  if (typeof val === 'object') return val.text || val.name || val.value || '';
+  return String(val);
+}
+
+/** 从日期字段值中提取毫秒时间戳（兼容数字/字符串/对象/数组） */
+export function extractTimestamp(val: any): number | null {
+  if (val === null || val === undefined) return null;
+  let raw: any = val;
+  if (Array.isArray(raw)) raw = raw[0];
+  if (typeof raw === 'object' && raw !== null) {
+    raw = raw.value ?? raw.text ?? raw.timestamp;
+  }
+  if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+  if (typeof raw === 'string') {
+    const n = Number(raw);
+    if (!isNaN(n)) return n > 1e12 ? n : n * 1000;
+    const d = dayjs(raw);
+    if (d.isValid()) return d.valueOf();
+  }
+  return null;
+}
+
+/** 格式化多维表格字段值为可读字符串 */
+export function formatFieldValue(val: any): string {
+  if (val === null || val === undefined || val === '') return '—';
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '—';
+    return val.map((v) => {
+      if (typeof v === 'object' && v !== null) {
+        return v.text || v.name || v.value || JSON.stringify(v);
+      }
+      return String(v);
+    }).join(', ');
+  }
+  if (typeof val === 'object') {
+    return val.text || val.name || val.value || JSON.stringify(val);
+  }
+  if (typeof val === 'number') {
+    if (val > 1e12) return dayjs(val).format('YYYY-MM-DD HH:mm');
+    return String(val);
+  }
+  return String(val);
+}
