@@ -2,7 +2,7 @@ import './style.scss';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   dashboard, bitable, ui, DashboardState, GroupMode, ORDER,
-  DATA_SOURCE_SORT_TYPE, SourceType, FieldType,
+  DATA_SOURCE_SORT_TYPE, SourceType, FieldType, ToastType,
 } from '@lark-base-open/js-sdk';
 import { Button, DatePicker, Radio, Select, Input, Switch, Slider, Modal, Popover } from '@douyinfe/semi-ui';
 import dayjs from 'dayjs';
@@ -104,7 +104,7 @@ export default function TimeLine(props: { bgColor: string }) {
     (tid: string, dr: any, tf: string, df: string) => ({
       tableId: tid,
       dataRange: dr,
-      series: 'COUNTA',
+      series: 'COUNTA' as const,
       groups: [
         { fieldId: tf, mode: GroupMode.INTEGRATED, sort: { order: ORDER.ASCENDING, sortType: DATA_SOURCE_SORT_TYPE.GROUP } },
         { fieldId: df, mode: GroupMode.INTEGRATED, sort: { order: ORDER.ASCENDING, sortType: DATA_SOURCE_SORT_TYPE.GROUP } },
@@ -168,10 +168,10 @@ export default function TimeLine(props: { bgColor: string }) {
       } else {
         const cfg = await dashboard.getConfig();
         const dc = Array.isArray(cfg.dataConditions) ? cfg.dataConditions[0] : cfg.dataConditions;
-        const tid = dc.tableId;
+        const tid = dc.tableId || '';
         const dr = dc.dataRange;
-        const tf = dc.groups?.[0]?.fieldId;
-        const df = dc.groups?.[1]?.fieldId;
+        const tf = dc.groups?.[0]?.fieldId || '';
+        const df = dc.groups?.[1]?.fieldId || '';
         const saved = (cfg.customConfig || {}) as Partial<ICustomConfig>;
         const merged = normalizeConfig(saved);
         const [rgs, cats] = await Promise.all([
@@ -346,7 +346,7 @@ export default function TimeLine(props: { bgColor: string }) {
   /** 点击节点：查询该任务在该日期的所有原始记录，用飞书原生弹窗展示 */
   const handleNodeClick = async (task: string, ts: number) => {
     if (!tableId) {
-      ui.showToast({ toastType: 'error', message: '数据表未初始化，请重新打开插件' });
+      ui.showToast({ toastType: ToastType.error, message: '数据表未初始化，请重新打开插件' });
       return;
     }
     try {
@@ -374,7 +374,7 @@ export default function TimeLine(props: { bgColor: string }) {
       console.log('[TimeLine] node click', { task, date: dayjs(ts).format('YYYY-MM-DD'), matched: dayRecords.length });
 
       if (dayRecords.length === 0) {
-        ui.showToast({ toastType: 'warning', message: `${task} · ${dayjs(ts).format('M月D日')} 暂无记录` });
+        ui.showToast({ toastType: ToastType.warning, message: `${task} · ${dayjs(ts).format('M月D日')} 暂无记录` });
         return;
       }
       if (dayRecords.length === 1) {
@@ -385,7 +385,7 @@ export default function TimeLine(props: { bgColor: string }) {
       setDetail({ visible: true, task, ts, records: dayRecords, loading: false });
     } catch (e) {
       console.error('[TimeLine] fetch records failed', e);
-      ui.showToast({ toastType: 'error', message: '查询记录失败' });
+      ui.showToast({ toastType: ToastType.error, message: '查询记录失败' });
     }
   };
 
@@ -408,7 +408,7 @@ export default function TimeLine(props: { bgColor: string }) {
       const done = getDoneDates(renderData, task);
       return { task, model: buildTimeline(done, custom.startDate, Date.now(), custom.showToday) };
     });
-  }, [renderData, custom.selectedTasks, custom.startDate]);
+  }, [renderData, custom.selectedTasks, custom.startDate, custom.showToday]);
 
   // 渲染完成通知截图
   useEffect(() => {
@@ -489,7 +489,7 @@ export default function TimeLine(props: { bgColor: string }) {
             <div className="tl-section">{t('section.datasource')}</div>
             <Item label={t('label.table')}>
               <Select
-                showSearch
+                filter
                 style={{ width: '100%' }}
                 value={tableId}
                 optionList={tableList.map((x) => ({ value: x.tableId, label: x.tableName }))}
@@ -512,7 +512,7 @@ export default function TimeLine(props: { bgColor: string }) {
             <div className="tl-section">{t('section.fields')}</div>
             <Item label={t('label.taskField')}>
               <Select
-                showSearch
+                filter
                 style={{ width: '100%' }}
                 value={taskFieldId}
                 optionList={categories
@@ -523,7 +523,7 @@ export default function TimeLine(props: { bgColor: string }) {
             </Item>
             <Item label={t('label.dateField')}>
               <Select
-                showSearch
+                filter
                 style={{ width: '100%' }}
                 value={dateFieldId}
                 optionList={categories
@@ -567,7 +567,7 @@ export default function TimeLine(props: { bgColor: string }) {
                   </div>
                 )}
                 <Select
-                  showSearch
+                  filter
                   style={{ width: '100%' }}
                   value=""
                   placeholder={t('label.addTask')}
@@ -598,7 +598,6 @@ export default function TimeLine(props: { bgColor: string }) {
             <Item label={t('label.orientation')}>
               <Radio.Group
                 type="button"
-                buttonStyle="solid"
                 value={custom.orientation}
                 onChange={(e) => updateCustom({ orientation: e.target.value as Orientation })}
                 options={[
