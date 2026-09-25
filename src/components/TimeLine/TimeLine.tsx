@@ -234,12 +234,13 @@ export default function TimeLine(props: { bgColor: string }) {
     });
   };
 
-  /** 点击节点：查询该任务在该日期的所有原始记录，用飞书原生弹窗展示 */
+  /** 点击节点：查询该任务在该日期的所有原始记录，内部模态框展示详情 */
   const handleNodeClick = async (task: string, ts: number) => {
     if (!tableId) {
       ui.showToast({ toastType: ToastType.error, message: '数据表未初始化，请重新打开插件' });
       return;
     }
+    setDetail({ visible: true, task, ts, records: [], loading: true });
     try {
       const table = await bitable.base.getTableById(tableId);
       const dayStart = startOfDay(ts);
@@ -265,24 +266,20 @@ export default function TimeLine(props: { bgColor: string }) {
       console.log('[TimeLine] node click', { task, date: dayjs(ts).format('YYYY-MM-DD'), matched: dayRecords.length });
 
       if (dayRecords.length === 0) {
+        setDetail((prev) => ({ ...prev, visible: false }));
         ui.showToast({ toastType: ToastType.warning, message: `${task} · ${dayjs(ts).format('M月D日')} 暂无记录` });
         return;
       }
-      if (dayRecords.length === 1) {
-        ui.showRecordDetailDialog({ tableId, recordId: dayRecords[0].recordId });
-        return;
-      }
-      // 多条记录：显示选择列表
-      setDetail({ visible: true, task, ts, records: dayRecords, loading: false });
+      setDetail((prev) => ({ ...prev, records: dayRecords, loading: false }));
     } catch (e) {
       console.error('[TimeLine] fetch records failed', e);
+      setDetail((prev) => ({ ...prev, records: [], loading: false }));
       ui.showToast({ toastType: ToastType.error, message: '查询记录失败' });
     }
   };
 
   const openRecordDetail = (recordId: string) => {
     ui.showRecordDetailDialog({ tableId, recordId });
-    setDetail((prev) => ({ ...prev, visible: false }));
   };
 
   const onSave = () => {
@@ -569,64 +566,94 @@ export default function TimeLine(props: { bgColor: string }) {
         </div>
       )}
 
-      {/* 多条记录选择弹窗 */}
+      {/* 节点详情模态框 */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>{getTaskStyle(detail.task).icon}</span>
-            <span style={{ fontWeight: 600 }}>{detail.task}</span>
-            <span style={{ color: '#999', fontSize: 13 }}>
-              {dayjs(detail.ts).format('M月D日')} · 共 {detail.records.length} 条
+            <span style={{ fontSize: 20 }}>{getTaskStyle(detail.task).icon}</span>
+            <span style={{ fontWeight: 600, fontSize: 16 }}>{detail.task}</span>
+            <span style={{ color: '#999', fontSize: 14 }}>
+              {dayjs(detail.ts).format('YYYY年M月D日 dddd')}
+            </span>
+            <span style={{
+              marginLeft: 'auto', fontSize: 12, padding: '2px 10px',
+              borderRadius: 10, background: getTaskStyle(detail.task).color + '22',
+              color: getTaskStyle(detail.task).color, fontWeight: 600,
+            }}>
+              {detail.records.length} 条记录
             </span>
           </div>
         }
         visible={detail.visible}
         onCancel={() => setDetail((prev) => ({ ...prev, visible: false }))}
         footer={null}
-        width={480}
+        width={680}
         centered
       >
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {detail.records.map((rec, idx) => {
-            const fields = rec.fields || {};
-            const taskColor = getTaskStyle(detail.task).color;
-            return (
-              <div
-                key={rec.recordId || idx}
-                onClick={() => openRecordDetail(rec.recordId)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 14px', marginBottom: 8,
-                  border: '1px solid #f0f0f0', borderRadius: 8,
-                  cursor: 'pointer', transition: 'all 0.15s ease',
-                  background: '#fafbfc',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.background = '#fff'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; e.currentTarget.style.background = '#fafbfc'; }}
-              >
-                <span style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: taskColor + '18', color: taskColor,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 600, flexShrink: 0,
-                }}>
-                  {idx + 1}
-                </span>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  {categories.slice(0, 3).map((cat: any) => (
-                    <div key={cat.fieldId} style={{ fontSize: 12, lineHeight: 1.6, display: 'flex', gap: 6 }}>
-                      <span style={{ color: '#999', flexShrink: 0 }}>{cat.fieldName}:</span>
-                      <span style={{ color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {formatFieldValue(fields[cat.fieldId])}
-                      </span>
-                    </div>
-                  ))}
+        {detail.loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: '#999' }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
+            正在加载记录…
+          </div>
+        ) : (
+          <div style={{ maxHeight: 520, overflowY: 'auto', paddingRight: 4 }}>
+            {detail.records.map((rec, idx) => {
+              const fields = rec.fields || {};
+              const taskColor = getTaskStyle(detail.task).color;
+              return (
+                <div
+                  key={rec.recordId || idx}
+                  style={{
+                    marginBottom: 14,
+                    padding: '14px 16px',
+                    border: '1px solid #f0f0f0',
+                    borderLeft: `3px solid ${taskColor}`,
+                    borderRadius: 8,
+                    background: '#fafbfc',
+                  }}
+                >
+                  <div style={{
+                    fontSize: 11, color: '#aaa', marginBottom: 10,
+                    letterSpacing: 0.5, fontWeight: 600, display: 'flex',
+                    alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <span>记录 {String(idx + 1).padStart(2, '0')}</span>
+                    <Button
+                      size="small"
+                      theme="borderless"
+                      style={{ color: taskColor, padding: '2px 8px', height: 'auto' }}
+                      onClick={() => openRecordDetail(rec.recordId)}
+                    >
+                      查看原始记录 →
+                    </Button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                    {categories.map((cat: any) => {
+                      const display = formatFieldValue(fields[cat.fieldId]);
+                      return (
+                        <div key={cat.fieldId} style={{
+                          display: 'flex', flexDirection: 'column',
+                          fontSize: 13, lineHeight: 1.5,
+                        }}>
+                          <span style={{ color: '#999', fontSize: 11, marginBottom: 1 }}>
+                            {cat.fieldName}
+                          </span>
+                          <span style={{
+                            wordBreak: 'break-all',
+                            fontWeight: cat.fieldId === taskFieldId ? 600 : 400,
+                            color: cat.fieldId === taskFieldId ? taskColor : '#333',
+                          }}>
+                            {display}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <span style={{ color: '#ccc', fontSize: 16, flexShrink: 0 }}>›</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Modal>
     </main>
   );
