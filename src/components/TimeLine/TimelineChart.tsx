@@ -3,6 +3,28 @@ import { ICustomConfig } from './config';
 import { ITimelineModel, formatDate, DAY_MS, dateKey } from './utils';
 import { TaskLabel } from './TaskLabel';
 
+/** SVG 竖排文字：一字一行。direction=down 首字在 y 处向下排；up 末字在 y 处向上排 */
+function VerticalText({ text, x, y, fontSize = 12, fill = '#7c3aed', fontWeight = 400, direction = 'down' }: {
+  text: string; x: number; y: number; fontSize?: number; fill?: string; fontWeight?: number; direction?: 'down' | 'up';
+}) {
+  const chars = Array.from(text);
+  const lineH = fontSize + 3;
+  return (
+    <>
+      {chars.map((ch, i) => {
+        const cy = direction === 'down'
+          ? y + i * lineH
+          : y - (chars.length - 1 - i) * lineH;
+        return (
+          <text key={i} x={x} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={fontSize} fontWeight={fontWeight} fill={fill}>
+            {ch}
+          </text>
+        );
+      })}
+    </>
+  );
+}
+
 interface TimelineChartProps {
   model: ITimelineModel;
   custom: ICustomConfig;
@@ -83,7 +105,7 @@ export function TimelineChart({
     yOf = (ts) => nodePos.get(ts) ?? padTop;
     xOf = () => xC;
   } else {
-    const padTop = 56, padBottom = 56, padLeft = 56, padRight = 56;
+    const padTop = 56, padBottom = 64, padLeft = 68, padRight = 68;
     yC = padTop + (H - padTop - padBottom) / 2;
     svgH = H;
     let x = padLeft;
@@ -105,9 +127,9 @@ export function TimelineChart({
   const numFontSize = 15;
   const todayTs = model.axisEnd;
   // 标签位置：竖向时间线在上下居中（横排文字），横向时间线在左右居中（竖排文字）
-  const headLabelX = vertical ? xC : 28;
+  const headLabelX = vertical ? xC : 34;
   const headLabelY = vertical ? 24 : yC;
-  const tailLabelX = vertical ? xC : svgW - 28;
+  const tailLabelX = vertical ? xC : svgW - 34;
   const tailLabelY = vertical ? svgH - 24 : yC;
 
   return (
@@ -165,12 +187,9 @@ export function TimelineChart({
           );
         })}
 
-        {/* 节点圆 + 日期（日期紧贴轴线） */}
+        {/* 节点圆 + 日期 */}
         {model.nodes.map((ts, i) => {
           const cx = xOf(ts), cy = yOf(ts);
-          let dx = cx, dy = cy, dAnchor: any = 'start';
-          if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
-          else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
           const recCount = recordCounts?.get(dateKey(ts)) ?? 1;
           const hasRing = recCount > 1;
           const ringR = r + 4;
@@ -184,15 +203,13 @@ export function TimelineChart({
                 style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
                 onClick={() => onNodeClick?.(ts)}
               />
-              <text
-                x={dx} y={dy}
-                textAnchor={dAnchor}
-                dominantBaseline="central"
-                fontSize={fontSize}
-                fill="#7c3aed"
-              >
-                {formatDate(ts)}
-              </text>
+              {vertical ? (
+                <text x={cx + 10} y={cy} textAnchor="start" dominantBaseline="central" fontSize={fontSize} fill="#7c3aed">
+                  {formatDate(ts)}
+                </text>
+              ) : (
+                <VerticalText text={formatDate(ts)} x={cx} y={cy + r + 12} fontSize={12} fill="#7c3aed" direction="down" />
+              )}
             </g>
           );
         })}
@@ -200,9 +217,6 @@ export function TimelineChart({
         {/* 空心节点（开始日期无任务等） */}
         {model.hollowNodes.map((ts, i) => {
           const cx = xOf(ts), cy = yOf(ts);
-          let dx = cx, dy = cy, dAnchor: any = 'start';
-          if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
-          else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
           return (
             <g key={`h-${i}`}>
               <circle
@@ -210,32 +224,42 @@ export function TimelineChart({
                 style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
                 onClick={() => onNodeClick?.(ts)}
               />
-              <text
-                x={dx} y={dy}
-                textAnchor={dAnchor}
-                dominantBaseline="central"
-                fontSize={fontSize}
-                fill="#7c3aed"
-              >
-                {formatDate(ts)}
-              </text>
+              {vertical ? (
+                <text x={cx + 10} y={cy} textAnchor="start" dominantBaseline="central" fontSize={fontSize} fill="#7c3aed">
+                  {formatDate(ts)}
+                </text>
+              ) : (
+                <VerticalText text={formatDate(ts)} x={cx} y={cy + r + 12} fontSize={12} fill="#7c3aed" direction="down" />
+              )}
             </g>
           );
         })}
 
         {/* 今天文字标记（今天的圆由 nodes/hollowNodes 统一渲染） */}
         {custom.showToday && (
-          <text
-            x={vertical ? xOf(todayTs) - 14 : xOf(todayTs)}
-            y={vertical ? yOf(todayTs) : yOf(todayTs) - 18}
-            textAnchor={vertical ? 'end' : 'middle'}
-            dominantBaseline="central"
-            fontSize={12}
-            fontWeight={600}
-            fill={nodeColor}
-          >
-            今天
-          </text>
+          vertical ? (
+            <text
+              x={xOf(todayTs) - 14}
+              y={yOf(todayTs)}
+              textAnchor="end"
+              dominantBaseline="central"
+              fontSize={12}
+              fontWeight={600}
+              fill={nodeColor}
+            >
+              今天
+            </text>
+          ) : (
+            <VerticalText
+              text="今天"
+              x={xOf(todayTs)}
+              y={yOf(todayTs) - r - 14}
+              fontSize={12}
+              fill={nodeColor}
+              fontWeight={600}
+              direction="up"
+            />
+          )
         )}
 
         {/* 头部任务标签 */}

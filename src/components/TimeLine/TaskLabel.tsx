@@ -22,33 +22,35 @@ export function TaskLabel({ name, icon, x, y, nodeColor, count, startTs, endTs, 
 
   if (verticalText) {
     const fontSize = 14;
-    const iconSize = 16;
-    const padX = 7, padY = 10;
-    const lineH = fontSize + 3;
+    const iconSize = 18;
+    const padX = 9, padY = 12;
+    const lineH = fontSize + 4;
     const chars = Array.from(name);
     const countStr = count != null ? `×${count}` : '';
     const countFontSize = 11;
-    const contentH = iconSize + 6 + chars.length * lineH + (countStr ? 6 + countFontSize : 0);
-    const boxW = Math.max(fontSize + 4, iconSize) + padX * 2;
+    const iconGap = 10;
+    const countGap = countStr ? 8 : 0;
+    const contentH = iconSize + iconGap + chars.length * lineH + countGap + (countStr ? countFontSize : 0);
+    const boxW = Math.max(fontSize + 8, iconSize + 4) + padX * 2;
     const boxH = contentH + padY * 2;
     const rx = 10;
     const bx = x - boxW / 2;
     const by = y - boxH / 2;
-    let cy = by + padY + iconSize / 2;
+    const iconY = by + padY + iconSize / 2;
+    const firstCharY = iconY + iconSize / 2 + iconGap + lineH / 2;
 
     return (
       <g style={{ cursor: 'default' }}>
         <title>{tooltip}</title>
         <rect x={bx} y={by} width={boxW} height={boxH} rx={rx} fill="#f3e8ff" />
-        <text x={x} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={iconSize}>
+        <text x={x} y={iconY} textAnchor="middle" dominantBaseline="central" fontSize={iconSize}>
           {icon}
         </text>
-        cy += iconSize / 2 + 6 + lineH / 2;
         {chars.map((ch, i) => (
           <text
             key={i}
             x={x}
-            y={cy + i * lineH}
+            y={firstCharY + i * lineH}
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={fontSize}
@@ -61,7 +63,7 @@ export function TaskLabel({ name, icon, x, y, nodeColor, count, startTs, endTs, 
         {countStr && (
           <text
             x={x}
-            y={cy + chars.length * lineH + 6 + countFontSize / 2}
+            y={firstCharY + chars.length * lineH + countGap + countFontSize / 2}
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={countFontSize}
