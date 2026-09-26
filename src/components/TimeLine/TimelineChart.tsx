@@ -208,7 +208,16 @@ export function TimelineChart({
                   {formatDate(ts)}
                 </text>
               ) : (
-                <VerticalText text={formatDate(ts)} x={cx} y={cy + r + 12} fontSize={12} fill="#7c3aed" direction="down" />
+                (() => {
+                  const [mon, day] = formatDate(ts).split('-');
+                  const dy = cy + r + 12;
+                  return (
+                    <>
+                      <text x={cx} y={dy} textAnchor="middle" dominantBaseline="central" fontSize={12} fill="#7c3aed" fontWeight={600}>{mon}月</text>
+                      <text x={cx} y={dy + 15} textAnchor="middle" dominantBaseline="central" fontSize={12} fill="#7c3aed">{day}日</text>
+                    </>
+                  );
+                })()
               )}
             </g>
           );
@@ -229,7 +238,16 @@ export function TimelineChart({
                   {formatDate(ts)}
                 </text>
               ) : (
-                <VerticalText text={formatDate(ts)} x={cx} y={cy + r + 12} fontSize={12} fill="#7c3aed" direction="down" />
+                (() => {
+                  const [mon, day] = formatDate(ts).split('-');
+                  const dy = cy + r + 12;
+                  return (
+                    <>
+                      <text x={cx} y={dy} textAnchor="middle" dominantBaseline="central" fontSize={12} fill="#7c3aed" fontWeight={600}>{mon}月</text>
+                      <text x={cx} y={dy + 15} textAnchor="middle" dominantBaseline="central" fontSize={12} fill="#7c3aed">{day}日</text>
+                    </>
+                  );
+                })()
               )}
             </g>
           );
