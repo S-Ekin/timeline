@@ -62,6 +62,39 @@ export function getDoneDates(data: any, selectedTask: string): number[] {
   return dates;
 }
 
+/**
+ * 从二维计算结果中提取指定任务每个日期的记录数。
+ * 返回 Map<日期时间戳(当天0点), 记录数>
+ */
+export function getRecordCounts(data: any, selectedTask: string): Map<number, number> {
+  const counts = new Map<number, number>();
+  if (!data || data.length < 2 || !selectedTask) return counts;
+  const header = data[0];
+  let targetRow: any[] | null = null;
+  for (let r = 1; r < data.length; r++) {
+    const cell = data[r]?.[0];
+    if (cell && (cell.text === selectedTask || String(cell.value) === selectedTask)) {
+      targetRow = data[r];
+      break;
+    }
+  }
+  if (!targetRow) return counts;
+  for (let c = 1; c < header.length; c++) {
+    const count = targetRow[c]?.value;
+    if (count && Number(count) > 0) {
+      const hv = header[c]?.value;
+      let ts: number | null = null;
+      if (typeof hv === 'number') ts = hv;
+      else if (typeof hv === 'string') {
+        const d = dayjs(hv);
+        if (d.isValid()) ts = d.valueOf();
+      }
+      if (ts != null) counts.set(startOfDay(ts), Number(count));
+    }
+  }
+  return counts;
+}
+
 /** 将时间戳规整为当天 0 点 */
 export function startOfDay(ts: number): number {
   return dayjs(ts).startOf('day').valueOf();

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Item } from '../Item';
 import {
   getDoneDates, getTaskValues, buildTimeline, startOfDay,
-  extractText, extractTimestamp, formatFieldValue,
+  extractText, extractTimestamp, formatFieldValue, getRecordCounts,
 } from './utils';
 import { ICustomConfig, DEFAULT_CONFIG, normalizeConfig, Orientation } from './config';
 import { TimelineChart } from './TimelineChart';
@@ -298,6 +298,7 @@ export default function TimeLine(props: { bgColor: string }) {
         task,
         model: buildTimeline(done, custom.startDate, Date.now(), custom.showToday),
         count: done.length,
+        recordCounts: getRecordCounts(renderData, task),
       };
     });
   }, [renderData, custom.selectedTasks, custom.startDate, custom.showToday]);
@@ -325,7 +326,7 @@ export default function TimeLine(props: { bgColor: string }) {
       <div className="tl-container">
         <div className="tl-scroll">
           <div className={vertical ? 'tl-charts-row' : 'tl-charts-col'}>
-            {taskModels.map(({ task, model, count }) => {
+            {taskModels.map(({ task, model, count, recordCounts }) => {
               const ts = getTaskStyle(task);
               return (
                 <div key={task} className={vertical ? 'tl-chart-cell' : 'tl-chart-cell-h'}>
@@ -339,6 +340,7 @@ export default function TimeLine(props: { bgColor: string }) {
                     taskIcon={ts.icon}
                     taskColor={ts.color}
                     count={count}
+                    recordCounts={recordCounts}
                   />
                 </div>
               );

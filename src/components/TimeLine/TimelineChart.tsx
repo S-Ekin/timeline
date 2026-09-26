@@ -13,14 +13,16 @@ interface TimelineChartProps {
   taskIcon?: string;
   taskColor?: string;
   count?: number;
+  recordCounts?: Map<number, number>;
 }
 
 /** SVG 时间线渲染：节点 + 实虚线段 + 天数标注 + 日期 + 任务标签 */
 export function TimelineChart({
-  model, custom, title, ready, emptyText, onNodeClick, taskIcon, taskColor, count,
+  model, custom, title, ready, emptyText, onNodeClick, taskIcon, taskColor, count, recordCounts,
 }: TimelineChartProps) {
   const icon = taskIcon || custom.icon;
   const nodeColor = taskColor || custom.nodeColor;
+  const ringGradId = `ring-grad-${nodeColor.replace('#', '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 300, h: 300 });
 
@@ -108,6 +110,14 @@ export function TimelineChart({
   return (
     <div ref={containerRef} className="tl-chart">
       <svg width={svgW} height={svgH} style={{ display: 'block' }}>
+        {/* 渐变定义：多记录节点圆环 */}
+        <defs>
+          <linearGradient id={ringGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={nodeColor} stopOpacity="0.9" />
+            <stop offset="50%" stopColor={nodeColor} stopOpacity="0.5" />
+            <stop offset="100%" stopColor={nodeColor} stopOpacity="0.15" />
+          </linearGradient>
+        </defs>
         {/* 线段 */}
         {model.segments.map((seg, i) => {
           const cx1 = xOf(seg.from), cy1 = yOf(seg.from);
@@ -158,8 +168,22 @@ export function TimelineChart({
           let dx = cx, dy = cy, dAnchor: any = 'start';
           if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
           else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
+          const recCount = recordCounts?.get(ts) ?? 1;
+          const hasRing = recCount > 1;
+          const ringR = r + 4;
           return (
             <g key={`n-${i}`}>
+              {hasRing && (
+                <>
+                  {/* 外层渐变圆环 */}
+                  <circle cx={cx} cy={cy} r={ringR} fill="none" stroke={`url(#${ringGradId})`} strokeWidth={2.5} strokeLinecap="round" />
+                  {/* 记录数小徽章 */}
+                  <circle cx={cx + ringR - 1} cy={cy - ringR + 1} r={7} fill={nodeColor} />
+                  <text x={cx + ringR - 1} y={cy - ringR + 1} textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight={700} fill="#fff">
+                    {recCount}
+                  </text>
+                </>
+              )}
               <circle
                 cx={cx} cy={cy} r={r} fill={nodeColor}
                 style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
