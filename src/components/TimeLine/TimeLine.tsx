@@ -10,25 +10,30 @@ import { useTranslation } from 'react-i18next';
 import { Item } from '../Item';
 import {
   getDoneDates, getTaskValues, buildTimeline, startOfDay,
-  extractText, extractTimestamp, formatFieldValue, dateKey,
+  extractText, extractTimestamp, formatFieldValue, dateKey, mergePreviewData,
 } from './utils';
 import { ICustomConfig, DEFAULT_CONFIG, normalizeConfig, Orientation } from './config';
 import { TimelineChart } from './TimelineChart';
 import { IconPicker } from './IconPicker';
 
+interface ITableMeta {
+  ranges: any[];
+  categories: any[];
+  dataRange: any;
+  taskFieldId: string;
+  dateFieldId: string;
+}
+
 export default function TimeLine(props: { bgColor: string }) {
   const { t } = useTranslation();
   const isCreate = dashboard.state === DashboardState.Create;
   const isConfig = dashboard.state === DashboardState.Config || isCreate;
-  console.log('[TimeLine] render, state=', dashboard.state, 'isConfig=', isConfig);
 
   const [tableList, setTableList] = useState<{ tableId: string; tableName: string }[]>([]);
-  const [ranges, setRanges] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [tableId, setTableId] = useState('');
-  const [dataRange, setDataRange] = useState<any>(null);
-  const [taskFieldId, setTaskFieldId] = useState('');
-  const [dateFieldId, setDateFieldId] = useState('');
+  const [tableIds, setTableIds] = useState<string[]>([]);
+  const [tableMeta, setTableMeta] = useState<Record<string, ITableMeta>>({});
+  const [taskFieldName, setTaskFieldName] = useState('');
+  const [dateFieldName, setDateFieldName] = useState('');
   const [availableTasks, setAvailableTasks] = useState<string[]>([]);
   const [renderData, setRenderData] = useState<any>(null);
   const [inited, setInited] = useState(false);
@@ -41,6 +46,25 @@ export default function TimeLine(props: { bgColor: string }) {
   const updateCustom = useCallback((patch: Partial<ICustomConfig>) => {
     setCustom((prev) => ({ ...prev, ...patch }));
   }, []);
+
+  /** 主表 ID（第一个选中的表，用于字段展示和详情模态框） */
+  const primaryTableId = tableIds[0] || '';
+  const primaryMeta = tableMeta[primaryTableId];
+
+  /** 合并所有选中表的字段名（去重），作为字段选择器的选项 */
+  const mergedFields = useMemo(() => {
+    const map = new Map<string, { fieldName: string; fieldType: number }>();
+    for (const tid of tableIds) {
+      const meta = tableMeta[tid];
+      if (!meta) continue;
+      for (const cat of meta.categories) {
+        if (!map.has(cat.fieldName)) {
+          map.set(cat.fieldName, { fieldName: cat.fieldName, fieldType: cat.fieldType });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [tableIds, tableMeta]);
 
   const buildCond = useCallback(
     (tid: string, dr: any, tf: string, df: string) => ({
@@ -55,45 +79,81 @@ export default function TimeLine(props: { bgColor: string }) {
     []
   );
 
-  const doPreview = useCallback(
-    async (tid: string, dr: any, tf: string, df: string) => {
-      if (!tid || !tf || !df) return [] as string[];
-      try {
-        const data = await dashboard.getPreviewData(buildCond(tid, dr, tf, df));
-        setRenderData(data);
-        const tasks = getTaskValues(data);
-        setAvailableTasks(tasks);
-        return tasks;
-      } catch (e) {
-        console.error(e);
-        return [];
-      }
-    },
-    [buildCond]
-  );
+  /** 根据字段名在指定表中查找 fieldId */
+  const findFieldId = useCallback((tid: string, fieldName: string): string => {
+    const meta = tableMeta[tid];
+    if (!meta || !fieldName) return '';
+    return meta.categories.find((c: any) => c.fieldName === fieldName)?.fieldId || '';
+  }, [tableMeta]);
 
-  /** 全量获取原始记录，按任务+日期统计条数（与详情模态框同一套筛选逻辑，保证一致） */
-  const fetchAllRecordCounts = useCallback(async (tid: string, tf: string, df: string) => {
-    if (!tid || !tf || !df) return;
+  /** 对所有选中表分别查询预览数据，合并后返回 */
+  const doPreview = useCallback(async () => {
+    if (tableIds.length === 0 || !taskFieldName || !dateFieldName) {
+      setRenderData(null);
+      setAvailableTasks([]);
+      return [];
+    }
     try {
-      const table = await bitable.base.getTableById(tid);
-      let allRecords: any[] = [];
-      let pageToken: string | undefined;
-      let page = 0;
-      do {
-        const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
-        const recs = result.records || result.items || [];
-        allRecords = allRecords.concat(recs);
-        pageToken = result.pageToken || result.nextPageToken;
-        page++;
-        if (page > 20) break;
-      } while (pageToken);
+      const dataList = await Promise.all(
+        tableIds.map(async (tid) => {
+          const meta = tableMeta[tid];
+          if (!meta) return null;
+          const tf = findFieldId(tid, taskFieldName);
+          const df = findFieldId(tid, dateFieldName);
+          if (!tf || !df) return null;
+          try {
+            return await dashboard.getPreviewData(buildCond(tid, meta.dataRange, tf, df));
+          } catch {
+            return null;
+          }
+        })
+      );
+      const valid = dataList.filter((d): d is any[][] => d != null);
+      const merged = mergePreviewData(valid);
+      setRenderData(merged);
+      const tasks = getTaskValues(merged);
+      setAvailableTasks(tasks);
+      return tasks;
+    } catch (e) {
+      console.error('[TimeLine] doPreview failed', e);
+      return [];
+    }
+  }, [tableIds, tableMeta, taskFieldName, dateFieldName, findFieldId, buildCond]);
+
+  /** 全量获取所有选中表的原始记录，按任务+日期统计条数 */
+  const fetchAllRecordCounts = useCallback(async () => {
+    if (tableIds.length === 0 || !taskFieldName || !dateFieldName) return;
+    try {
+      const allRecords: any[] = [];
+      for (const tid of tableIds) {
+        const tf = findFieldId(tid, taskFieldName);
+        const df = findFieldId(tid, dateFieldName);
+        if (!tf || !df) continue;
+        try {
+          const table = await bitable.base.getTableById(tid);
+          let pageToken: string | undefined;
+          let page = 0;
+          do {
+            const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
+            const recs = result.records || result.items || [];
+            for (const rec of recs) {
+              rec._tableId = tid;
+              allRecords.push(rec);
+            }
+            pageToken = result.pageToken || result.nextPageToken;
+            page++;
+            if (page > 20) break;
+          } while (pageToken);
+        } catch (e) {
+          console.error(`[TimeLine] fetch records from table ${tid} failed`, e);
+        }
+      }
 
       const counts: Record<string, Map<string, number>> = {};
       for (const rec of allRecords) {
         const fields = rec.fields || rec.fieldValues || {};
-        const taskText = extractText(fields[tf]);
-        const dateTs = extractTimestamp(fields[df]);
+        const taskText = extractText(fields[findFieldId(rec._tableId, taskFieldName)]);
+        const dateTs = extractTimestamp(fields[findFieldId(rec._tableId, dateFieldName)]);
         if (taskText && dateTs != null) {
           const key = dateKey(dateTs);
           if (!counts[taskText]) counts[taskText] = new Map();
@@ -104,6 +164,18 @@ export default function TimeLine(props: { bgColor: string }) {
     } catch (e) {
       console.error('[TimeLine] fetchAllRecordCounts failed', e);
     }
+  }, [tableIds, taskFieldName, dateFieldName, findFieldId]);
+
+  /** 加载单个表的元数据（ranges + categories），自动匹配字段 */
+  const loadTableMeta = useCallback(async (tid: string): Promise<ITableMeta> => {
+    const [rgs, cats] = await Promise.all([
+      dashboard.getTableDataRange(tid),
+      dashboard.getCategories(tid),
+    ]);
+    const dr = rgs[0];
+    const df = cats.find((c: any) => c.fieldType === FieldType.DateTime)?.fieldId || cats[0]?.fieldId || '';
+    const tf = cats.find((c: any) => c.fieldId !== df)?.fieldId || '';
+    return { ranges: rgs, categories: cats, dataRange: dr, taskFieldId: tf, dateFieldId: df };
   }, []);
 
   // ---- 配置 / 创建态：初始化 ----
@@ -120,58 +192,66 @@ export default function TimeLine(props: { bgColor: string }) {
 
       if (dashboard.state === DashboardState.Create) {
         const tid = list[0]?.tableId;
-        const [rgs, cats] = await Promise.all([
-          dashboard.getTableDataRange(tid),
-          dashboard.getCategories(tid),
-        ]);
-        if (cancelled) return;
-        setRanges(rgs);
-        setCategories(cats);
-        const dr = rgs[0];
-        const df =
-          cats.find((c: any) => c.fieldType === FieldType.DateTime)?.fieldId ||
-          cats[0]?.fieldId ||
-          '';
-        const tf = cats.find((c: any) => c.fieldId !== df)?.fieldId || '';
-        setTableId(tid);
-        setDataRange(dr);
-        setDateFieldId(df);
-        setTaskFieldId(tf);
-        const tasks = await doPreview(tid, dr, tf, df);
-        if (!cancelled && tasks && tasks[0]) {
-          updateCustom({ selectedTasks: [tasks[0]] });
+        if (tid) {
+          const meta = await loadTableMeta(tid);
+          if (cancelled) return;
+          setTableIds([tid]);
+          setTableMeta({ [tid]: meta });
+          setTaskFieldName(meta.categories.find((c: any) => c.fieldId === meta.taskFieldId)?.fieldName || '');
+          setDateFieldName(meta.categories.find((c: any) => c.fieldId === meta.dateFieldId)?.fieldName || '');
         }
-        await fetchAllRecordCounts(tid, tf, df);
       } else {
         const cfg = await dashboard.getConfig();
-        const dc = Array.isArray(cfg.dataConditions) ? cfg.dataConditions[0] : cfg.dataConditions;
-        const tid = dc.tableId || '';
-        const dr = dc.dataRange;
-        const tf = dc.groups?.[0]?.fieldId || '';
-        const df = dc.groups?.[1]?.fieldId || '';
+        const dcList = Array.isArray(cfg.dataConditions) ? cfg.dataConditions : [cfg.dataConditions];
         const saved = (cfg.customConfig || {}) as Partial<ICustomConfig>;
         const merged = normalizeConfig(saved);
-        const [rgs, cats] = await Promise.all([
-          dashboard.getTableDataRange(tid),
-          dashboard.getCategories(tid),
-        ]);
+
+        const tids: string[] = [];
+        const metaMap: Record<string, ITableMeta> = {};
+        let tfName = '';
+        let dfName = '';
+
+        for (const dc of dcList) {
+          if (!dc?.tableId) continue;
+          tids.push(dc.tableId);
+          const meta = await loadTableMeta(dc.tableId);
+          metaMap[dc.tableId] = {
+            ...meta,
+            dataRange: dc.dataRange || meta.dataRange,
+            taskFieldId: dc.groups?.[0]?.fieldId || meta.taskFieldId,
+            dateFieldId: dc.groups?.[1]?.fieldId || meta.dateFieldId,
+          };
+          if (!tfName) {
+            tfName = meta.categories.find((c: any) => c.fieldId === (dc.groups?.[0]?.fieldId || meta.taskFieldId))?.fieldName || '';
+          }
+          if (!dfName) {
+            dfName = meta.categories.find((c: any) => c.fieldId === (dc.groups?.[1]?.fieldId || meta.dateFieldId))?.fieldName || '';
+          }
+        }
         if (cancelled) return;
-        setRanges(rgs);
-        setCategories(cats);
-        setTableId(tid);
-        setDataRange(dr);
-        setDateFieldId(df);
-        setTaskFieldId(tf);
+        setTableIds(tids);
+        setTableMeta(metaMap);
+        setTaskFieldName(tfName);
+        setDateFieldName(dfName);
         setCustom(merged);
-        await doPreview(tid, dr, tf, df);
-        await fetchAllRecordCounts(tid, tf, df);
       }
       setInited(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [isConfig, doPreview, updateCustom]);
+  }, [isConfig, loadTableMeta]);
+
+  // 字段或表变化后重新查询预览数据和记录统计
+  useEffect(() => {
+    if (!isConfig || !inited) return;
+    doPreview().then((tasks) => {
+      if (tasks.length && custom.selectedTasks.every((t) => !tasks.includes(t))) {
+        updateCustom({ selectedTasks: [tasks[0]] });
+      }
+    });
+    fetchAllRecordCounts();
+  }, [tableIds, taskFieldName, dateFieldName, inited]);
 
   // ---- 展示态 ----
   useEffect(() => {
@@ -179,75 +259,142 @@ export default function TimeLine(props: { bgColor: string }) {
     let off: any;
     (async () => {
       const cfg = await dashboard.getConfig();
-      const dc = Array.isArray(cfg.dataConditions) ? cfg.dataConditions[0] : cfg.dataConditions;
       const saved = (cfg.customConfig || {}) as Partial<ICustomConfig>;
       const merged = normalizeConfig(saved);
       setCustom(merged);
-      const tid = dc?.tableId || '';
-      setTableId(tid);
-      setTaskFieldId(dc?.groups?.[0]?.fieldId || '');
-      setDateFieldId(dc?.groups?.[1]?.fieldId || '');
-      if (tid) {
+
+      const dcList = Array.isArray(cfg.dataConditions) ? cfg.dataConditions : [cfg.dataConditions];
+      const tids: string[] = [];
+      const metaMap: Record<string, ITableMeta> = {};
+      let tfName = '';
+      let dfName = '';
+
+      for (const dc of dcList) {
+        if (!dc?.tableId) continue;
+        tids.push(dc.tableId);
         try {
-          const cats = await dashboard.getCategories(tid);
-          setCategories(cats);
-        } catch (e) { console.error('load categories failed', e); }
+          const meta = await loadTableMeta(dc.tableId);
+          metaMap[dc.tableId] = {
+            ...meta,
+            dataRange: dc.dataRange || meta.dataRange,
+            taskFieldId: dc.groups?.[0]?.fieldId || meta.taskFieldId,
+            dateFieldId: dc.groups?.[1]?.fieldId || meta.dateFieldId,
+          };
+          if (!tfName) {
+            tfName = meta.categories.find((c: any) => c.fieldId === (dc.groups?.[0]?.fieldId || meta.taskFieldId))?.fieldName || '';
+          }
+          if (!dfName) {
+            dfName = meta.categories.find((c: any) => c.fieldId === (dc.groups?.[1]?.fieldId || meta.dateFieldId))?.fieldName || '';
+          }
+        } catch (e) {
+          console.error('load table meta failed', dc.tableId, e);
+        }
       }
-      const data = await dashboard.getData();
-      setRenderData(data);
-      const df2 = dc?.groups?.[1]?.fieldId || '';
-      const tf2 = dc?.groups?.[0]?.fieldId || '';
-      if (tid && tf2 && df2) fetchAllRecordCounts(tid, tf2, df2);
+      setTableIds(tids);
+      setTableMeta(metaMap);
+      setTaskFieldName(tfName);
+      setDateFieldName(dfName);
+
+      // 合并所有表的预览数据
+      try {
+        const dataList = await Promise.all(
+          dcList.map(async (dc: any) => {
+            if (!dc?.tableId) return null;
+            try {
+              return await dashboard.getPreviewData(dc);
+            } catch {
+              return null;
+            }
+          })
+        );
+        const valid = dataList.filter((d): d is any[][] => d != null);
+        setRenderData(mergePreviewData(valid));
+      } catch (e) {
+        console.error('getData failed', e);
+      }
+
+      // 记录统计
+      if (tids.length && tfName && dfName) {
+        // 展示态用 tableMeta 查找 fieldId，需要等 meta 加载完
+        setTimeout(() => {
+          const counts: Record<string, Map<string, number>> = {};
+          (async () => {
+            for (const tid of tids) {
+              const meta = metaMap[tid];
+              if (!meta) continue;
+              try {
+                const table = await bitable.base.getTableById(tid);
+                let pageToken: string | undefined;
+                let page = 0;
+                do {
+                  const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
+                  const recs = result.records || result.items || [];
+                  for (const rec of recs) {
+                    const fields = rec.fields || rec.fieldValues || {};
+                    const taskText = extractText(fields[meta.taskFieldId]);
+                    const dateTs = extractTimestamp(fields[meta.dateFieldId]);
+                    if (taskText && dateTs != null) {
+                      const key = dateKey(dateTs);
+                      if (!counts[taskText]) counts[taskText] = new Map();
+                      counts[taskText].set(key, (counts[taskText].get(key) || 0) + 1);
+                    }
+                  }
+                  pageToken = result.pageToken || result.nextPageToken;
+                  page++;
+                  if (page > 20) break;
+                } while (pageToken);
+              } catch (e) {
+                console.error('fetch records failed', tid, e);
+              }
+            }
+            setRecordCountsMap(counts);
+          })();
+        }, 0);
+      }
+
       off = dashboard.onDataChange((res: any) => setRenderData(res.data));
     })();
     return () => {
       if (off) off();
     };
-  }, [isConfig]);
+  }, [isConfig, loadTableMeta]);
 
   // ---- 配置变更 ----
-  const onTableChange = async (tid: string) => {
-    setTableId(tid);
-    const [rgs, cats] = await Promise.all([
-      dashboard.getTableDataRange(tid),
-      dashboard.getCategories(tid),
-    ]);
-    setRanges(rgs);
-    setCategories(cats);
-    const dr = rgs[0];
-    setDataRange(dr);
-    const df =
-      cats.find((c: any) => c.fieldType === FieldType.DateTime)?.fieldId || cats[0]?.fieldId || '';
-    const tf = cats.find((c: any) => c.fieldId !== df)?.fieldId || '';
-    setDateFieldId(df);
-    setTaskFieldId(tf);
-    const tasks = await doPreview(tid, dr, tf, df);
-    if (tasks[0]) updateCustom({ selectedTasks: [tasks[0]] });
-    await fetchAllRecordCounts(tid, tf, df);
-  };
-
-  const onDataRangeChange = (drJson: string) => {
-    const dr = JSON.parse(drJson);
-    setDataRange(dr);
-    doPreview(tableId, dr, taskFieldId, dateFieldId).then((tasks) => {
-      if (tasks.length && custom.selectedTasks.every((t) => !tasks.includes(t))) {
-        updateCustom({ selectedTasks: [tasks[0]] });
+  const onTablesChange = async (values: string[]) => {
+    const newIds = values || [];
+    // 加载新增表的元数据
+    const newMeta = { ...tableMeta };
+    for (const tid of newIds) {
+      if (!newMeta[tid]) {
+        try {
+          newMeta[tid] = await loadTableMeta(tid);
+        } catch (e) {
+          console.error('load table meta failed', tid, e);
+        }
       }
-    });
+    }
+    setTableMeta(newMeta);
+    setTableIds(newIds);
+    // 如果当前选中的字段名在新表中不存在，自动重新匹配
+    if (newIds.length > 0) {
+      const firstMeta = newMeta[newIds[0]];
+      if (firstMeta) {
+        if (!taskFieldName || !firstMeta.categories.find((c: any) => c.fieldName === taskFieldName)) {
+          setTaskFieldName(firstMeta.categories.find((c: any) => c.fieldId === firstMeta.taskFieldId)?.fieldName || '');
+        }
+        if (!dateFieldName || !firstMeta.categories.find((c: any) => c.fieldName === dateFieldName)) {
+          setDateFieldName(firstMeta.categories.find((c: any) => c.fieldId === firstMeta.dateFieldId)?.fieldName || '');
+        }
+      }
+    }
   };
 
-  const onTaskFieldChange = (tf: string) => {
-    setTaskFieldId(tf);
-    doPreview(tableId, dataRange, tf, dateFieldId).then((tasks) => {
-      if (tasks[0]) updateCustom({ selectedTasks: [tasks[0]] });
-    });
-  };
-
-  const onDateFieldChange = (df: string) => {
-    setDateFieldId(df);
-    doPreview(tableId, dataRange, taskFieldId, df).then((tasks) => {
-      if (tasks[0]) updateCustom({ selectedTasks: [tasks[0]] });
-    });
+  const onDataRangeChange = (tid: string, drJson: string) => {
+    const dr = JSON.parse(drJson);
+    setTableMeta((prev) => ({
+      ...prev,
+      [tid]: { ...prev[tid], dataRange: dr },
+    }));
   };
 
   const addTask = (task: string) => {
@@ -275,36 +422,46 @@ export default function TimeLine(props: { bgColor: string }) {
     });
   };
 
-  /** 点击节点：查询该任务在该日期的所有原始记录，内部模态框展示详情 */
+  /** 点击节点：从所有选中表查询该任务在该日期的所有原始记录 */
   const handleNodeClick = async (task: string, ts: number) => {
-    if (!tableId) {
+    if (tableIds.length === 0) {
       ui.showToast({ toastType: ToastType.error, message: '数据表未初始化，请重新打开插件' });
       return;
     }
     setDetail({ visible: true, task, ts, records: [], loading: true });
     try {
-      const table = await bitable.base.getTableById(tableId);
       const dayStart = startOfDay(ts);
-      let allRecords: any[] = [];
-      let pageToken: string | undefined;
-      let page = 0;
-      do {
-        const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
-        const recs = result.records || result.items || [];
-        allRecords = allRecords.concat(recs);
-        pageToken = result.pageToken || result.nextPageToken;
-        page++;
-        if (page > 20) break;
-      } while (pageToken);
-
-      const dayRecords = allRecords.filter((rec: any) => {
-        const fields = rec.fields || rec.fieldValues || {};
-        const taskText = extractText(fields[taskFieldId]);
-        const dateTs = extractTimestamp(fields[dateFieldId]);
-        return taskText === task && dateTs != null && startOfDay(dateTs) === dayStart;
-      });
-
-      console.log('[TimeLine] node click', { task, date: dayjs(ts).format('YYYY-MM-DD'), matched: dayRecords.length });
+      const dayRecords: any[] = [];
+      for (const tid of tableIds) {
+        const meta = tableMeta[tid];
+        if (!meta) continue;
+        const tf = findFieldId(tid, taskFieldName);
+        const df = findFieldId(tid, dateFieldName);
+        if (!tf || !df) continue;
+        try {
+          const table = await bitable.base.getTableById(tid);
+          let pageToken: string | undefined;
+          let page = 0;
+          do {
+            const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
+            const recs = result.records || result.items || [];
+            for (const rec of recs) {
+              const fields = rec.fields || rec.fieldValues || {};
+              const taskText = extractText(fields[tf]);
+              const dateTs = extractTimestamp(fields[df]);
+              if (taskText === task && dateTs != null && startOfDay(dateTs) === dayStart) {
+                rec._tableId = tid;
+                dayRecords.push(rec);
+              }
+            }
+            pageToken = result.pageToken || result.nextPageToken;
+            page++;
+            if (page > 20) break;
+          } while (pageToken);
+        } catch (e) {
+          console.error(`[TimeLine] fetch records from ${tid} failed`, e);
+        }
+      }
 
       if (dayRecords.length === 0) {
         setDetail((prev) => ({ ...prev, visible: false }));
@@ -319,14 +476,27 @@ export default function TimeLine(props: { bgColor: string }) {
     }
   };
 
-  const openRecordDetail = (recordId: string) => {
-    ui.showRecordDetailDialog({ tableId, recordId });
+  const openRecordDetail = (recordId: string, tid?: string) => {
+    ui.showRecordDetailDialog({ tableId: tid || primaryTableId, recordId });
   };
 
   const onSave = () => {
-    const dataCondition = buildCond(tableId, dataRange, taskFieldId, dateFieldId);
+    const conditions = tableIds
+      .map((tid) => {
+        const meta = tableMeta[tid];
+        const tf = findFieldId(tid, taskFieldName);
+        const df = findFieldId(tid, dateFieldName);
+        if (!meta || !tf || !df) return null;
+        return buildCond(tid, meta.dataRange, tf, df);
+      })
+      .filter((c): c is ReturnType<typeof buildCond> => c != null);
+
+    if (conditions.length === 0) {
+      ui.showToast({ toastType: ToastType.error, message: '请先选择数据表和字段' });
+      return;
+    }
     dashboard.saveConfig({
-      dataConditions: dataCondition,
+      dataConditions: conditions.length === 1 ? conditions[0] : conditions,
       customConfig: custom,
     } as any);
   };
@@ -353,11 +523,14 @@ export default function TimeLine(props: { bgColor: string }) {
   }, [taskModels]);
 
   const vertical = custom.orientation === 'vertical';
-  const commonEmpty = !tableId && isConfig
+  const commonEmpty = tableIds.length === 0 && isConfig
     ? t('please.config')
     : custom.selectedTasks.length === 0
     ? t('please.selectTask')
     : '';
+
+  // 详情模态框用主表的字段展示
+  const detailCategories = primaryMeta?.categories || [];
 
   return (
     <main
@@ -426,23 +599,26 @@ export default function TimeLine(props: { bgColor: string }) {
             <Item label={t('label.table')}>
               <Select
                 filter
+                multiple
                 style={{ width: '100%' }}
-                value={tableId}
+                value={tableIds}
                 optionList={tableList.map((x) => ({ value: x.tableId, label: x.tableName }))}
-                onChange={(v) => onTableChange(v as string)}
+                onChange={(v) => onTablesChange(v as string[])}
               />
             </Item>
-            <Item label={t('label.dataRange')}>
-              <Select
-                style={{ width: '100%' }}
-                value={dataRange ? JSON.stringify(dataRange) : ''}
-                optionList={ranges.map((r: any) => ({
-                  value: JSON.stringify(r),
-                  label: r.type === SourceType.ALL ? t('range.all') : r.viewName,
-                }))}
-                onChange={(v) => onDataRangeChange(v as string)}
-              />
-            </Item>
+            {tableIds.length === 1 && primaryMeta && (
+              <Item label={t('label.dataRange')}>
+                <Select
+                  style={{ width: '100%' }}
+                  value={primaryMeta.dataRange ? JSON.stringify(primaryMeta.dataRange) : ''}
+                  optionList={primaryMeta.ranges.map((r: any) => ({
+                    value: JSON.stringify(r),
+                    label: r.type === SourceType.ALL ? t('range.all') : r.viewName,
+                  }))}
+                  onChange={(v) => onDataRangeChange(primaryTableId, v as string)}
+                />
+              </Item>
+            )}
 
             {/* 字段与任务 */}
             <div className="tl-section">{t('section.fields')}</div>
@@ -450,22 +626,22 @@ export default function TimeLine(props: { bgColor: string }) {
               <Select
                 filter
                 style={{ width: '100%' }}
-                value={taskFieldId}
-                optionList={categories
-                  .filter((c: any) => c.fieldId !== dateFieldId)
-                  .map((c: any) => ({ value: c.fieldId, label: c.fieldName }))}
-                onChange={(v) => onTaskFieldChange(v as string)}
+                value={taskFieldName}
+                optionList={mergedFields
+                  .filter((c: any) => c.fieldName !== dateFieldName)
+                  .map((c: any) => ({ value: c.fieldName, label: c.fieldName }))}
+                onChange={(v) => setTaskFieldName(v as string)}
               />
             </Item>
             <Item label={t('label.dateField')}>
               <Select
                 filter
                 style={{ width: '100%' }}
-                value={dateFieldId}
-                optionList={categories
-                  .filter((c: any) => c.fieldId !== taskFieldId)
-                  .map((c: any) => ({ value: c.fieldId, label: c.fieldName }))}
-                onChange={(v) => onDateFieldChange(v as string)}
+                value={dateFieldName}
+                optionList={mergedFields
+                  .filter((c: any) => c.fieldName !== taskFieldName)
+                  .map((c: any) => ({ value: c.fieldName, label: c.fieldName }))}
+                onChange={(v) => setDateFieldName(v as string)}
               />
             </Item>
             <Item label={t('label.task')}>
@@ -648,6 +824,9 @@ export default function TimeLine(props: { bgColor: string }) {
             {detail.records.map((rec, idx) => {
               const fields = rec.fields || {};
               const taskColor = getTaskStyle(detail.task).color;
+              const recTableId = rec._tableId || primaryTableId;
+              const recMeta = tableMeta[recTableId];
+              const recTaskFieldId = recMeta?.taskFieldId || '';
               return (
                 <div
                   key={rec.recordId || idx}
@@ -665,18 +844,18 @@ export default function TimeLine(props: { bgColor: string }) {
                     letterSpacing: 0.5, fontWeight: 600, display: 'flex',
                     alignItems: 'center', justifyContent: 'space-between',
                   }}>
-                    <span>记录 {String(idx + 1).padStart(2, '0')}</span>
+                    <span>记录 {String(idx + 1).padStart(2, '0')}{recTableId !== primaryTableId && ` · 来自表 ${recTableId}`}</span>
                     <Button
                       size="small"
                       theme="borderless"
                       style={{ color: taskColor, padding: '2px 8px', height: 'auto' }}
-                      onClick={() => openRecordDetail(rec.recordId)}
+                      onClick={() => openRecordDetail(rec.recordId, recTableId)}
                     >
                       查看原始记录 →
                     </Button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
-                    {categories.map((cat: any) => {
+                    {detailCategories.map((cat: any) => {
                       const display = formatFieldValue(fields[cat.fieldId]);
                       return (
                         <div key={cat.fieldId} style={{
@@ -688,8 +867,8 @@ export default function TimeLine(props: { bgColor: string }) {
                           </span>
                           <span style={{
                             wordBreak: 'break-all',
-                            fontWeight: cat.fieldId === taskFieldId ? 600 : 400,
-                            color: cat.fieldId === taskFieldId ? taskColor : '#333',
+                            fontWeight: cat.fieldId === recTaskFieldId ? 600 : 400,
+                            color: cat.fieldId === recTaskFieldId ? taskColor : '#333',
                           }}>
                             {display}
                           </span>

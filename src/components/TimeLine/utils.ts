@@ -102,6 +102,71 @@ export function getRecordCounts(data: any, selectedTask: string): Map<string, nu
   return counts;
 }
 
+/** 从 header cell 中解析日期时间戳 */
+function parseHeaderTs(hv: any): number | null {
+  if (typeof hv === 'number') return hv;
+  if (typeof hv === 'string') {
+    const d = dayjs(hv);
+    if (d.isValid()) return d.valueOf();
+  }
+  return null;
+}
+
+/**
+ * 合并多个表的预览数据：相同任务名的 count 相加，日期取并集。
+ * 输入多个二维数组，输出一个合并后的二维数组。
+ */
+export function mergePreviewData(dataList: any[][]): any[][] {
+  const valid = dataList.filter((d) => d && d.length >= 2);
+  if (valid.length === 0) return [];
+  if (valid.length === 1) return valid[0];
+
+  // 收集所有日期（去重，按天规整，排序）
+  const dateSet = new Set<number>();
+  for (const data of valid) {
+    const header = data[0];
+    for (let c = 1; c < header.length; c++) {
+      const ts = parseHeaderTs(header[c]?.value);
+      if (ts != null) dateSet.add(startOfDay(ts));
+    }
+  }
+  const allDates = Array.from(dateSet).sort((a, b) => a - b);
+
+  // 收集所有任务，合并 count
+  const taskMap = new Map<string, number[]>();
+  for (const data of valid) {
+    const header = data[0];
+    for (let r = 1; r < data.length; r++) {
+      const cell = data[r]?.[0];
+      const taskName = cell?.text || String(cell?.value || '');
+      if (!taskName) continue;
+      if (!taskMap.has(taskName)) taskMap.set(taskName, new Array(allDates.length).fill(0));
+      const counts = taskMap.get(taskName)!;
+      for (let c = 1; c < header.length; c++) {
+        const ts = parseHeaderTs(header[c]?.value);
+        if (ts != null) {
+          const idx = allDates.indexOf(startOfDay(ts));
+          if (idx >= 0) counts[idx] += Number(data[r]?.[c]?.value || 0);
+        }
+      }
+    }
+  }
+
+  // 构建合并后的二维数组
+  const taskFieldName = valid[0]?.[0]?.[0]?.text || '任务';
+  const result: any[][] = [[
+    { text: taskFieldName, value: taskFieldName },
+    ...allDates.map((d) => ({ value: d, text: dayjs(d).format('YYYY-MM-DD') })),
+  ]];
+  for (const [taskName, counts] of taskMap) {
+    result.push([
+      { text: taskName, value: taskName },
+      ...counts.map((c) => ({ value: c, text: String(c) })),
+    ]);
+  }
+  return result;
+}
+
 /** 将时间戳规整为当天 0 点 */
 export function startOfDay(ts: number): number {
   return dayjs(ts).startOf('day').valueOf();
