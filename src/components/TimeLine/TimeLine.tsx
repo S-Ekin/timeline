@@ -294,7 +294,11 @@ export default function TimeLine(props: { bgColor: string }) {
   const taskModels = useMemo(() => {
     return custom.selectedTasks.map((task) => {
       const done = getDoneDates(renderData, task);
-      return { task, model: buildTimeline(done, custom.startDate, Date.now(), custom.showToday) };
+      return {
+        task,
+        model: buildTimeline(done, custom.startDate, Date.now(), custom.showToday),
+        count: done.length,
+      };
     });
   }, [renderData, custom.selectedTasks, custom.startDate, custom.showToday]);
 
@@ -321,7 +325,7 @@ export default function TimeLine(props: { bgColor: string }) {
       <div className="tl-container">
         <div className="tl-scroll">
           <div className={vertical ? 'tl-charts-row' : 'tl-charts-col'}>
-            {taskModels.map(({ task, model }) => {
+            {taskModels.map(({ task, model, count }) => {
               const ts = getTaskStyle(task);
               return (
                 <div key={task} className={vertical ? 'tl-chart-cell' : 'tl-chart-cell-h'}>
@@ -334,6 +338,7 @@ export default function TimeLine(props: { bgColor: string }) {
                     onNodeClick={(t) => handleNodeClick(task, t)}
                     taskIcon={ts.icon}
                     taskColor={ts.color}
+                    count={count}
                   />
                 </div>
               );

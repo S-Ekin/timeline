@@ -12,11 +12,12 @@ interface TimelineChartProps {
   onNodeClick?: (ts: number) => void;
   taskIcon?: string;
   taskColor?: string;
+  count?: number;
 }
 
 /** SVG 时间线渲染：节点 + 实虚线段 + 天数标注 + 日期 + 任务标签 */
 export function TimelineChart({
-  model, custom, title, ready, emptyText, onNodeClick, taskIcon, taskColor,
+  model, custom, title, ready, emptyText, onNodeClick, taskIcon, taskColor, count,
 }: TimelineChartProps) {
   const icon = taskIcon || custom.icon;
   const nodeColor = taskColor || custom.nodeColor;
@@ -65,7 +66,7 @@ export function TimelineChart({
   let yOf: (ts: number) => number;
 
   if (vertical) {
-    const padTop = 56, padBottom = 48, padLeft = 48, padRight = 64;
+    const padTop = 56, padBottom = 56, padLeft = 48, padRight = 64;
     xC = padLeft + (W - padLeft - padRight) / 2;
     svgW = W;
     let y = padTop;
@@ -80,7 +81,7 @@ export function TimelineChart({
     yOf = (ts) => nodePos.get(ts) ?? padTop;
     xOf = () => xC;
   } else {
-    const padTop = 48, padBottom = 56, padLeft = 60, padRight = 48;
+    const padTop = 56, padBottom = 56, padLeft = 60, padRight = 48;
     yC = padTop + (H - padTop - padBottom) / 2;
     svgH = H;
     let x = padLeft;
@@ -101,6 +102,8 @@ export function TimelineChart({
   const fontSize = 13;
   const numFontSize = 15;
   const todayTs = model.axisEnd;
+  const labelY = vertical ? svgH - 22 : yC;
+  const labelX = vertical ? xC : svgW - 22;
 
   return (
     <div ref={containerRef} className="tl-chart">
@@ -149,12 +152,12 @@ export function TimelineChart({
           );
         })}
 
-        {/* 节点圆 + 日期 */}
+        {/* 节点圆 + 日期（日期紧贴轴线） */}
         {model.nodes.map((ts, i) => {
           const cx = xOf(ts), cy = yOf(ts);
           let dx = cx, dy = cy, dAnchor: any = 'start';
-          if (vertical) { dx = cx + 14; dy = cy; dAnchor = 'start'; }
-          else { dx = cx; dy = cy + 26; dAnchor = 'middle'; }
+          if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
+          else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
           return (
             <g key={`n-${i}`}>
               <circle
@@ -179,8 +182,8 @@ export function TimelineChart({
         {model.hollowNodes.map((ts, i) => {
           const cx = xOf(ts), cy = yOf(ts);
           let dx = cx, dy = cy, dAnchor: any = 'start';
-          if (vertical) { dx = cx + 14; dy = cy; dAnchor = 'start'; }
-          else { dx = cx; dy = cy + 26; dAnchor = 'middle'; }
+          if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
+          else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
           return (
             <g key={`h-${i}`}>
               <circle
@@ -216,7 +219,7 @@ export function TimelineChart({
           </text>
         )}
 
-        {/* 任务标签 */}
+        {/* 顶部任务标签 */}
         {custom.showTitle && title && (
           <TaskLabel
             name={title}
@@ -225,6 +228,24 @@ export function TimelineChart({
             y={vertical ? 22 : yC}
             vertical={vertical}
             nodeColor={nodeColor}
+            count={count}
+            startTs={model.axisStart}
+            endTs={model.axisEnd}
+          />
+        )}
+
+        {/* 底部任务标签 */}
+        {custom.showTitle && title && (
+          <TaskLabel
+            name={title}
+            icon={icon}
+            x={labelX}
+            y={labelY}
+            vertical={vertical}
+            nodeColor={nodeColor}
+            count={count}
+            startTs={model.axisStart}
+            endTs={model.axisEnd}
           />
         )}
       </svg>
