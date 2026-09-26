@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Item } from '../Item';
 import {
   getDoneDates, getTaskValues, buildTimeline, startOfDay,
-  extractText, extractTimestamp, formatFieldValue, getRecordCounts,
+  extractText, extractTimestamp, formatFieldValue, dateKey,
 } from './utils';
 import { ICustomConfig, DEFAULT_CONFIG, normalizeConfig, Orientation } from './config';
 import { TimelineChart } from './TimelineChart';
@@ -36,6 +36,7 @@ export default function TimeLine(props: { bgColor: string }) {
   const [detail, setDetail] = useState<{
     visible: boolean; task: string; ts: number; records: any[]; loading: boolean;
   }>({ visible: false, task: '', ts: 0, records: [], loading: false });
+  const [recordCountsMap, setRecordCountsMap] = useState<Record<string, Map<string, number>>>({});
 
   const updateCustom = useCallback((patch: Partial<ICustomConfig>) => {
     setCustom((prev) => ({ ...prev, ...patch }));
@@ -70,6 +71,40 @@ export default function TimeLine(props: { bgColor: string }) {
     },
     [buildCond]
   );
+
+  /** 全量获取原始记录，按任务+日期统计条数（与详情模态框同一套筛选逻辑，保证一致） */
+  const fetchAllRecordCounts = useCallback(async (tid: string, tf: string, df: string) => {
+    if (!tid || !tf || !df) return;
+    try {
+      const table = await bitable.base.getTableById(tid);
+      let allRecords: any[] = [];
+      let pageToken: string | undefined;
+      let page = 0;
+      do {
+        const result: any = await table.getRecords({ pageSize: 500, pageToken } as any);
+        const recs = result.records || result.items || [];
+        allRecords = allRecords.concat(recs);
+        pageToken = result.pageToken || result.nextPageToken;
+        page++;
+        if (page > 20) break;
+      } while (pageToken);
+
+      const counts: Record<string, Map<string, number>> = {};
+      for (const rec of allRecords) {
+        const fields = rec.fields || rec.fieldValues || {};
+        const taskText = extractText(fields[tf]);
+        const dateTs = extractTimestamp(fields[df]);
+        if (taskText && dateTs != null) {
+          const key = dateKey(dateTs);
+          if (!counts[taskText]) counts[taskText] = new Map();
+          counts[taskText].set(key, (counts[taskText].get(key) || 0) + 1);
+        }
+      }
+      setRecordCountsMap(counts);
+    } catch (e) {
+      console.error('[TimeLine] fetchAllRecordCounts failed', e);
+    }
+  }, []);
 
   // ---- 配置 / 创建态：初始化 ----
   useEffect(() => {
@@ -106,6 +141,7 @@ export default function TimeLine(props: { bgColor: string }) {
         if (!cancelled && tasks && tasks[0]) {
           updateCustom({ selectedTasks: [tasks[0]] });
         }
+        await fetchAllRecordCounts(tid, tf, df);
       } else {
         const cfg = await dashboard.getConfig();
         const dc = Array.isArray(cfg.dataConditions) ? cfg.dataConditions[0] : cfg.dataConditions;
@@ -128,6 +164,7 @@ export default function TimeLine(props: { bgColor: string }) {
         setTaskFieldId(tf);
         setCustom(merged);
         await doPreview(tid, dr, tf, df);
+        await fetchAllRecordCounts(tid, tf, df);
       }
       setInited(true);
     })();
@@ -158,6 +195,9 @@ export default function TimeLine(props: { bgColor: string }) {
       }
       const data = await dashboard.getData();
       setRenderData(data);
+      const df2 = dc?.groups?.[1]?.fieldId || '';
+      const tf2 = dc?.groups?.[0]?.fieldId || '';
+      if (tid && tf2 && df2) fetchAllRecordCounts(tid, tf2, df2);
       off = dashboard.onDataChange((res: any) => setRenderData(res.data));
     })();
     return () => {
@@ -183,6 +223,7 @@ export default function TimeLine(props: { bgColor: string }) {
     setTaskFieldId(tf);
     const tasks = await doPreview(tid, dr, tf, df);
     if (tasks[0]) updateCustom({ selectedTasks: [tasks[0]] });
+    await fetchAllRecordCounts(tid, tf, df);
   };
 
   const onDataRangeChange = (drJson: string) => {
@@ -298,10 +339,10 @@ export default function TimeLine(props: { bgColor: string }) {
         task,
         model: buildTimeline(done, custom.startDate, Date.now(), custom.showToday),
         count: done.length,
-        recordCounts: getRecordCounts(renderData, task),
+        recordCounts: recordCountsMap[task],
       };
     });
-  }, [renderData, custom.selectedTasks, custom.startDate, custom.showToday]);
+  }, [renderData, custom.selectedTasks, custom.startDate, custom.showToday, recordCountsMap]);
 
   // 渲染完成通知截图
   useEffect(() => {

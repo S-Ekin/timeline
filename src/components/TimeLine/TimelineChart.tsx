@@ -169,9 +169,6 @@ export function TimelineChart({
           if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
           else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
           const recCount = recordCounts?.get(dateKey(ts)) ?? 1;
-          if (i === 0) {
-            console.log('[TimelineChart] recordCounts=', recordCounts, 'nodes=', model.nodes.map((n) => ({ ts: n, date: dateKey(n), count: recordCounts?.get(dateKey(n)) })));
-          }
           const hasRing = recCount > 1;
           const ringR = r + 4;
           return (
