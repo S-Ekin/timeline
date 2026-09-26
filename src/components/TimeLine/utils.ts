@@ -62,12 +62,17 @@ export function getDoneDates(data: any, selectedTask: string): number[] {
   return dates;
 }
 
+/** 日期字符串 key，避免时间戳精度问题 */
+export function dateKey(ts: number): string {
+  return dayjs(ts).format('YYYY-MM-DD');
+}
+
 /**
  * 从二维计算结果中提取指定任务每个日期的记录数。
- * 返回 Map<日期时间戳(当天0点), 记录数>
+ * 返回 Map<日期字符串 YYYY-MM-DD, 记录数>
  */
-export function getRecordCounts(data: any, selectedTask: string): Map<number, number> {
-  const counts = new Map<number, number>();
+export function getRecordCounts(data: any, selectedTask: string): Map<string, number> {
+  const counts = new Map<string, number>();
   if (!data || data.length < 2 || !selectedTask) return counts;
   const header = data[0];
   let targetRow: any[] | null = null;
@@ -89,7 +94,9 @@ export function getRecordCounts(data: any, selectedTask: string): Map<number, nu
         const d = dayjs(hv);
         if (d.isValid()) ts = d.valueOf();
       }
-      if (ts != null) counts.set(startOfDay(ts), Number(count));
+      if (ts != null) {
+        counts.set(dateKey(ts), Number(count));
+      }
     }
   }
   return counts;

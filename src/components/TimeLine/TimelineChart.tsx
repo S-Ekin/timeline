@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ICustomConfig } from './config';
-import { ITimelineModel, formatDate, DAY_MS } from './utils';
+import { ITimelineModel, formatDate, DAY_MS, dateKey } from './utils';
 import { TaskLabel } from './TaskLabel';
 
 interface TimelineChartProps {
@@ -13,7 +13,7 @@ interface TimelineChartProps {
   taskIcon?: string;
   taskColor?: string;
   count?: number;
-  recordCounts?: Map<number, number>;
+  recordCounts?: Map<string, number>;
 }
 
 /** SVG 时间线渲染：节点 + 实虚线段 + 天数标注 + 日期 + 任务标签 */
@@ -168,7 +168,10 @@ export function TimelineChart({
           let dx = cx, dy = cy, dAnchor: any = 'start';
           if (vertical) { dx = cx + 10; dy = cy; dAnchor = 'start'; }
           else { dx = cx; dy = cy + 22; dAnchor = 'middle'; }
-          const recCount = recordCounts?.get(ts) ?? 1;
+          const recCount = recordCounts?.get(dateKey(ts)) ?? 1;
+          if (i === 0) {
+            console.log('[TimelineChart] recordCounts=', recordCounts, 'nodes=', model.nodes.map((n) => ({ ts: n, date: dateKey(n), count: recordCounts?.get(dateKey(n)) })));
+          }
           const hasRing = recCount > 1;
           const ringR = r + 4;
           return (
