@@ -31,6 +31,8 @@
   align-items: stretch;
   min-width: 100%;
   min-height: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 .tl-charts-col {
@@ -39,6 +41,8 @@
   align-items: stretch;
   min-width: 100%;
   min-height: 100%;
+  padding: 16px 0;
+  box-sizing: border-box;
 }
 
 .tl-chart-cell {
