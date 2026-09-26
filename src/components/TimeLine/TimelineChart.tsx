@@ -174,15 +174,7 @@ export function TimelineChart({
           return (
             <g key={`n-${i}`}>
               {hasRing && (
-                <>
-                  {/* 外层渐变圆环 */}
-                  <circle cx={cx} cy={cy} r={ringR} fill="none" stroke={`url(#${ringGradId})`} strokeWidth={2.5} strokeLinecap="round" />
-                  {/* 记录数小徽章 */}
-                  <circle cx={cx + ringR - 1} cy={cy - ringR + 1} r={7} fill={nodeColor} />
-                  <text x={cx + ringR - 1} y={cy - ringR + 1} textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight={700} fill="#fff">
-                    {recCount}
-                  </text>
-                </>
+                <circle cx={cx} cy={cy} r={ringR} fill="none" stroke={`url(#${ringGradId})`} strokeWidth={2.5} strokeLinecap="round" />
               )}
               <circle
                 cx={cx} cy={cy} r={r} fill={nodeColor}
