@@ -6,15 +6,15 @@ interface TaskLabelProps {
   icon: string;
   x: number;
   y: number;
-  vertical: boolean;
   nodeColor: string;
   count?: number;
   startTs?: number;
   endTs?: number;
+  rotate?: number;
 }
 
-/** SVG 任务标签（圆角矩形 + 图标 + 名称 + 总次数），hover 显示时间范围 */
-export function TaskLabel({ name, icon, x, y, vertical, nodeColor, count, startTs, endTs }: TaskLabelProps) {
+/** SVG 任务标签（圆角矩形 + 图标 + 名称 + 总次数），hover 显示时间范围。rotate 为旋转角度（围绕中心点）。 */
+export function TaskLabel({ name, icon, x, y, nodeColor, count, startTs, endTs, rotate = 0 }: TaskLabelProps) {
   const fontSize = 15;
   const iconSize = 16;
   const padX = 14, padY = 8;
@@ -24,16 +24,18 @@ export function TaskLabel({ name, icon, x, y, vertical, nodeColor, count, startT
   const boxW = textW + iconSize + 8 + padX * 2;
   const boxH = fontSize + padY * 2;
   const rx = 10;
-  const bx = vertical ? x - boxW / 2 : x;
-  const by = vertical ? y - boxH / 2 : y - boxH / 2;
-  const contentStartX = vertical ? x - boxW / 2 + padX : x + padX;
+  const bx = x - boxW / 2;
+  const by = y - boxH / 2;
+  const contentStartX = x - boxW / 2 + padX;
 
   const tooltip = startTs != null && endTs != null
     ? `${name}  ${dayjs(startTs).format('YYYY-MM-DD')} ~ ${dayjs(endTs).format('YYYY-MM-DD')}${count != null ? `  共 ${count} 次` : ''}`
     : name;
 
+  const transform = rotate ? `rotate(${rotate}, ${x}, ${y})` : undefined;
+
   return (
-    <g style={{ cursor: 'default' }}>
+    <g transform={transform} style={{ cursor: 'default' }}>
       <title>{tooltip}</title>
       <rect x={bx} y={by} width={boxW} height={boxH} rx={rx} fill="#f3e8ff" />
       <text

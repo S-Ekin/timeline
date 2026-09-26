@@ -83,7 +83,7 @@ export function TimelineChart({
     yOf = (ts) => nodePos.get(ts) ?? padTop;
     xOf = () => xC;
   } else {
-    const padTop = 56, padBottom = 56, padLeft = 60, padRight = 48;
+    const padTop = 56, padBottom = 56, padLeft = 56, padRight = 56;
     yC = padTop + (H - padTop - padBottom) / 2;
     svgH = H;
     let x = padLeft;
@@ -104,8 +104,13 @@ export function TimelineChart({
   const fontSize = 13;
   const numFontSize = 15;
   const todayTs = model.axisEnd;
-  const labelY = vertical ? svgH - 22 : yC;
-  const labelX = vertical ? xC : svgW - 22;
+  // 标签位置：竖向时间线在上下居中，横向时间线在左右居中并旋转
+  const headLabelX = vertical ? xC : 28;
+  const headLabelY = vertical ? 24 : yC;
+  const tailLabelX = vertical ? xC : svgW - 28;
+  const tailLabelY = vertical ? svgH - 24 : yC;
+  const headRotate = vertical ? 0 : -90;
+  const tailRotate = vertical ? 0 : 90;
 
   return (
     <div ref={containerRef} className="tl-chart">
@@ -235,14 +240,14 @@ export function TimelineChart({
           </text>
         )}
 
-        {/* 顶部任务标签 */}
+        {/* 头部任务标签 */}
         {custom.showTitle && title && (
           <TaskLabel
             name={title}
             icon={icon}
-            x={vertical ? xC : 22}
-            y={vertical ? 22 : yC}
-            vertical={vertical}
+            x={headLabelX}
+            y={headLabelY}
+            rotate={headRotate}
             nodeColor={nodeColor}
             count={count}
             startTs={model.axisStart}
@@ -250,14 +255,14 @@ export function TimelineChart({
           />
         )}
 
-        {/* 底部任务标签 */}
+        {/* 尾部任务标签 */}
         {custom.showTitle && title && (
           <TaskLabel
             name={title}
             icon={icon}
-            x={labelX}
-            y={labelY}
-            vertical={vertical}
+            x={tailLabelX}
+            y={tailLabelY}
+            rotate={tailRotate}
             nodeColor={nodeColor}
             count={count}
             startTs={model.axisStart}
