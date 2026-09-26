@@ -104,13 +104,11 @@ export function TimelineChart({
   const fontSize = 13;
   const numFontSize = 15;
   const todayTs = model.axisEnd;
-  // 标签位置：竖向时间线在上下居中，横向时间线在左右居中并旋转
+  // 标签位置：竖向时间线在上下居中（横排文字），横向时间线在左右居中（竖排文字）
   const headLabelX = vertical ? xC : 28;
   const headLabelY = vertical ? 24 : yC;
   const tailLabelX = vertical ? xC : svgW - 28;
   const tailLabelY = vertical ? svgH - 24 : yC;
-  const headRotate = vertical ? 0 : -90;
-  const tailRotate = vertical ? 0 : 90;
 
   return (
     <div ref={containerRef} className="tl-chart">
@@ -247,7 +245,7 @@ export function TimelineChart({
             icon={icon}
             x={headLabelX}
             y={headLabelY}
-            rotate={headRotate}
+            verticalText={!vertical}
             nodeColor={nodeColor}
             count={count}
             startTs={model.axisStart}
@@ -262,7 +260,7 @@ export function TimelineChart({
             icon={icon}
             x={tailLabelX}
             y={tailLabelY}
-            rotate={tailRotate}
+            verticalText={!vertical}
             nodeColor={nodeColor}
             count={count}
             startTs={model.axisStart}
